@@ -1,0 +1,174 @@
+"""Elasticsearch indexing + search for the catalog (ТЗ Этап 5.3–5.11).
+
+Uses the stock `elasticsearch` client (no plugins): the built-in Russian snowball
+stemmer gives morphology-aware matching (посадка↔посадить), an edge-ngram analyzer
+powers instant autosuggest, and fuzzy multi_match handles typos. Synonyms are
+indexed per-plant from `plant_synonyms`. Callers fall back to PostgreSQL when ES
+is unavailable (see views). A fuller lemmatizer (analysis-morphology / hunspell)
+can be added to the ES image later without changing this interface.
+"""
+from django.conf import settings as dj_settings
+from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk
+
+INDEX = "plants"
+
+INDEX_BODY = {
+    "settings": {
+        "analysis": {
+            "filter": {
+                "ru_stop": {"type": "stop", "stopwords": "_russian_"},
+                "ru_stemmer": {"type": "stemmer", "language": "russian"},
+                "edge_ngram": {"type": "edge_ngram", "min_gram": 2, "max_gram": 20},
+            },
+            "analyzer": {
+                "ru": {
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "ru_stop", "ru_stemmer"],
+                },
+                "ru_suggest_index": {
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "edge_ngram"],
+                },
+                "ru_suggest_search": {
+                    "tokenizer": "standard",
+                    "filter": ["lowercase"],
+                },
+            },
+        }
+    },
+    "mappings": {
+        "properties": {
+            "id_plant": {"type": "integer"},
+            "url_slug": {"type": "keyword"},
+            "name_rus": {"type": "text", "analyzer": "ru"},
+            "lat_name": {"type": "text", "analyzer": "standard"},
+            "species": {"type": "text", "analyzer": "standard"},
+            "genus": {"type": "text", "analyzer": "ru"},
+            "family": {"type": "text", "analyzer": "ru"},
+            "synonyms": {"type": "text", "analyzer": "ru"},
+            "description": {"type": "text", "analyzer": "ru"},
+            "usda_zone": {"type": "integer"},
+            "suggest": {
+                "type": "text",
+                "analyzer": "ru_suggest_index",
+                "search_analyzer": "ru_suggest_search",
+            },
+        }
+    },
+}
+
+SEARCH_FIELDS = [
+    "name_rus^5", "synonyms^4", "lat_name^3", "genus^2", "family^2",
+    "species", "description",
+]
+
+
+def get_client():
+    return Elasticsearch(dj_settings.ELASTICSEARCH_URL, request_timeout=10)
+
+
+def is_available(client=None):
+    try:
+        return (client or get_client()).ping()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def build_document(plant):
+    species = plant.species
+    genus = species.genus
+    family = genus.family
+    description = getattr(plant, "description", None)
+    synonyms = [s.full_name or s.synonym_name for s in plant.synonyms.all()]
+    name_rus = plant.name_rus or ""
+    lat_name = plant.lat_name_unique or ""
+    return {
+        "_index": INDEX,
+        "_id": plant.id_plant,
+        "id_plant": plant.id_plant,
+        "url_slug": plant.url_slug,
+        "name_rus": name_rus,
+        "lat_name": lat_name,
+        "species": species.name,
+        "genus": genus.name or genus.rus_name or "",
+        "family": family.family_lat if family else "",
+        "synonyms": synonyms,
+        "description": (description.content_text if description else "") or "",
+        "usda_zone": plant.usda_zone,
+        # name + latin + folk/scientific synonyms feed the autosuggest (ТЗ 5.6/5.7)
+        "suggest": " ".join(filter(None, [name_rus, lat_name, *synonyms])),
+    }
+
+
+def reindex(queryset, *, client=None, chunk_size=1000):
+    """Drop and rebuild the index from a Plant queryset. Returns indexed count."""
+    client = client or get_client()
+    if client.indices.exists(index=INDEX):
+        client.indices.delete(index=INDEX)
+    client.indices.create(index=INDEX, body=INDEX_BODY)
+    indexed, _ = bulk(
+        client,
+        (build_document(p) for p in queryset.iterator(chunk_size=chunk_size)),
+        chunk_size=chunk_size,
+        request_timeout=120,
+    )
+    client.indices.refresh(index=INDEX)
+    return indexed
+
+
+def search(query, *, size=24, offset=0, client=None):
+    client = client or get_client()
+    body = {
+        "from": offset,
+        "size": size,
+        "query": {
+            "multi_match": {
+                "query": query,
+                "fields": SEARCH_FIELDS,
+                "type": "best_fields",
+                "fuzziness": "AUTO",
+                "operator": "and",
+            }
+        },
+        "highlight": {
+            "pre_tags": ["<mark>"],
+            "post_tags": ["</mark>"],
+            "fields": {"name_rus": {}, "synonyms": {}, "description": {"fragment_size": 150}},
+        },
+    }
+    resp = client.search(index=INDEX, body=body)
+    hits = resp["hits"]
+    return {
+        "count": hits["total"]["value"],
+        "results": [
+            {
+                "id_plant": h["_source"]["id_plant"],
+                "url_slug": h["_source"]["url_slug"],
+                "name": h["_source"]["name_rus"] or h["_source"]["lat_name"],
+                "lat_name": h["_source"]["lat_name"],
+                "family": h["_source"]["family"],
+                "score": h["_score"],
+                "highlight": h.get("highlight", {}),
+            }
+            for h in hits["hits"]
+        ],
+    }
+
+
+def suggest(query, *, size=10, client=None):
+    client = client or get_client()
+    body = {
+        "size": size,
+        "_source": ["id_plant", "url_slug", "name_rus", "lat_name"],
+        "query": {"match": {"suggest": {"query": query, "operator": "and"}}},
+    }
+    resp = client.search(index=INDEX, body=body)
+    return [
+        {
+            "id_plant": h["_source"]["id_plant"],
+            "url_slug": h["_source"]["url_slug"],
+            "name": h["_source"]["name_rus"] or h["_source"]["lat_name"],
+        }
+        for h in resp["hits"]["hits"]
+    ]

@@ -1,0 +1,4 @@
+-r base.txt
+
+# Error tracking (ТЗ Этап 1.11)
+sentry-sdk[django]>=2.0,<3.0

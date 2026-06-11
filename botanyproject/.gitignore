@@ -1,0 +1,54 @@
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Python / Django ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+*.sqlite3
+/backend/static/
+/backend/mediafiles/
+/backend/staticfiles/
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+.turbo/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Docker / data volumes ----
+/data/
+*.dump
+*.sql.gz
+# Client DB dumps live at repo root; never commit them (infra/**/*.sql stays tracked).
+/*.sql
+/dump-*.sql
+
+# ---- IDE / OS ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# ---- Project local ----
+/scratch/
+/backups/
+
+# Local offline wheelhouse (see backend/Dockerfile); keep the dir, ignore wheels.
+/backend/wheels/*
+!/backend/wheels/.gitkeep

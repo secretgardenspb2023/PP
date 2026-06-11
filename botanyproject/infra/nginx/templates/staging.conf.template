@@ -1,0 +1,46 @@
+# Staging server for ${STAGING_DOMAIN} (ТЗ Этап 1.12): HTTP Basic Auth + closed
+# from search engines. Mount this template only in the staging environment.
+
+server {
+    listen 80;
+    server_name ${STAGING_DOMAIN};
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${STAGING_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${STAGING_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${STAGING_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    include /etc/nginx/snippets/security-headers.conf;
+
+    # Closed for the whole site (ТЗ 1.12).
+    auth_basic           "PoiskPlant staging";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+
+    location = /robots.txt {
+        add_header Content-Type text/plain;
+        return 200 "User-agent: *\nDisallow: /\n";
+    }
+
+    location /static/ {
+        alias /app/staticfiles/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    location /img/ {
+        proxy_pass http://imgproxy/;
+        proxy_cache img_cache;
+        proxy_cache_valid 200 30d;
+    }
+    location / {
+        proxy_pass http://backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+}

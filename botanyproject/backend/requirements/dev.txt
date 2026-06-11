@@ -1,0 +1,11 @@
+-r base.txt
+
+# Testing (ТЗ Этап 5.19)
+pytest>=8.2,<9.0
+pytest-django>=4.8,<5.0
+factory_boy>=3.3,<4.0
+
+# Tooling
+ruff>=0.6,<1.0
+django-debug-toolbar>=4.4,<6.0
+ipython>=8.0

@@ -1,0 +1,75 @@
+# Production server for ${DOMAIN} (ТЗ Этап 1.4/1.5). Rendered by the nginx
+# image via envsubst (${DOMAIN} comes from the environment).
+
+# HTTP → HTTPS, plus ACME challenge for Let's Encrypt renewal.
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    include /etc/nginx/snippets/security-headers.conf;
+
+    # ---- Auth endpoints: strict rate limit (ТЗ 9.1) ----
+    location /api/v1/auth/ {
+        limit_req zone=auth burst=5 nodelay;
+        proxy_pass http://backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
+    # ---- API ----
+    location /api/ {
+        limit_req zone=api burst=20 nodelay;
+        proxy_pass http://backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
+    # ---- Django admin ----
+    location /admin/ {
+        proxy_pass http://backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
+    # ---- Django static (collectstatic volume) ----
+    location /static/ {
+        alias /app/staticfiles/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # ---- Processed images via imgproxy, cached on disk (ТЗ 9) ----
+    location /img/ {
+        proxy_pass http://imgproxy/;
+        proxy_cache img_cache;
+        proxy_cache_valid 200 30d;
+        proxy_cache_use_stale error timeout updating;
+        proxy_cache_lock on;
+        add_header X-Cache-Status $upstream_cache_status;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    # ---- Frontend (Next.js, ТЗ Этап 6). Until then, API root is the landing. ----
+    location / {
+        proxy_pass http://backend;          # TODO этап 6: switch to http://frontend
+        include /etc/nginx/snippets/proxy.conf;
+    }
+}

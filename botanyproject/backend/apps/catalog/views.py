@@ -1,0 +1,188 @@
+"""Catalog read-API (ТЗ Этап 5)."""
+import hashlib
+from urllib.parse import urlencode
+
+from django.core.cache import cache
+from django.db.models import Prefetch, Q
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import mixins, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from . import models as m
+from . import search as es
+from .filters import DIMENSIONS, RANGES, SORTS, apply_filters, facet_counts
+from .serializers import PlantDetailSerializer, PlantListSerializer
+
+SEARCH_PAGE_SIZE = 24
+
+
+def _int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+# relation accessor -> link model, prefetched with its dictionary value
+_LINK_RELATIONS = {
+    "leaf_shapes": m.PlantLeafShape,
+    "habit_forms": m.PlantHabitForm,
+    "flower_forms": m.PlantFlowerForm,
+    "sun_types": m.PlantSunType,
+    "soil_acidity": m.PlantSoilAcidity,
+    "propagation_methods": m.PlantPropagation,
+    "care_levels": m.PlantCareLevel,
+    "design_uses_m2m": m.PlantDesignUse,
+    "garden_styles_m2m": m.PlantGardenStyle,
+    "designers": m.PlantDesigner,
+    "fruit_uses_m2m": m.PlantFruitUse,
+    "flower_colors_m2m": m.PlantFlowerColor,
+    "leaf_colors_m2m": m.PlantLeafColor,
+    "vegetation_periods_m2m": m.PlantVegetationPeriod,
+    "flowering_months_m2m": m.PlantFloweringMonth,
+    "fruiting_months_m2m": m.PlantFruitingMonth,
+}
+
+
+def _detail_queryset():
+    prefetches = [
+        Prefetch(name, queryset=model.objects.select_related("value"))
+        for name, model in _LINK_RELATIONS.items()
+    ]
+    return (
+        m.Plant.objects.select_related(
+            "species__genus__family", "visual", "care", "design", "description"
+        )
+        .prefetch_related("photos", "synonyms", *prefetches)
+    )
+
+
+_FILTER_PARAMS = [
+    OpenApiParameter("q", str, description="Текстовый поиск по названиям и таксономии."),
+    OpenApiParameter("sort", str, description=f"Сортировка: {', '.join(SORTS)}."),
+    OpenApiParameter("usda_zone", str, description="Зоны USDA через запятую (OR)."),
+    *[
+        OpenApiParameter(dim, str, description="Несколько значений через запятую (OR).")
+        for dim in DIMENSIONS
+    ],
+    *[
+        OpenApiParameter(f"{prefix}_{bound}", int, description=f"{field} ({bound}).")
+        for prefix, field in RANGES.items()
+        for bound in ("min", "max")
+    ],
+]
+
+
+class PlantViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Список карточек с фасетными фильтрами и детальная карточка растения."""
+
+    def get_serializer_class(self):
+        return PlantDetailSerializer if self.action == "retrieve" else PlantListSerializer
+
+    def get_queryset(self):
+        if self.action == "retrieve":
+            return _detail_queryset()
+        qs = m.Plant.objects.select_related("species__genus__family").prefetch_related("photos")
+        qs = apply_filters(qs, self.request.query_params).distinct()
+        sort = SORTS.get(self.request.query_params.get("sort", ""), "id_plant")
+        return qs.order_by(sort)
+
+    @extend_schema(parameters=_FILTER_PARAMS)
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        parameters=_FILTER_PARAMS,
+        description="Счётчики фасетных фильтров с учётом остальных активных фильтров.",
+    )
+    @action(detail=False)
+    def facets(self, request):
+        # Facets are the heaviest query (16 grouped counts) — cache in Redis with
+        # a short TTL (ТЗ 5.20). Read-only catalog, so TTL expiry is enough; add
+        # explicit invalidation once card editing lands (этап 7).
+        params = sorted(request.query_params.items())
+        key = "facets:" + hashlib.md5(urlencode(params).encode()).hexdigest()  # noqa: S324
+        data = cache.get(key)
+        if data is None:
+            data = facet_counts(m.Plant.objects.all(), request.query_params)
+            cache.set(key, data, timeout=600)
+        return Response(data)
+
+
+class SearchView(APIView):
+    """Полнотекстовый поиск (Elasticsearch: морфология + опечатки + синонимы,
+    подсветка). При недоступности ES — fallback на PostgreSQL ILIKE (ТЗ 5.11)."""
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("q", str, required=True, description="Поисковый запрос."),
+            OpenApiParameter("page", int, description="Страница (по 24)."),
+        ],
+        responses={200: dict},
+    )
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if not query:
+            return Response({"count": 0, "results": [], "engine": "none"})
+        page = max(1, _int(request.query_params.get("page"), 1))
+        offset = (page - 1) * SEARCH_PAGE_SIZE
+
+        if es.is_available():
+            try:
+                data = es.search(query, size=SEARCH_PAGE_SIZE, offset=offset)
+                data["engine"] = "elasticsearch"
+                return Response(data)
+            except Exception:  # noqa: BLE001 — degrade to PostgreSQL
+                pass
+        return Response(self._pg_fallback(query, offset))
+
+    @staticmethod
+    def _pg_fallback(query, offset):
+        qs = (
+            m.Plant.objects.select_related("species__genus__family")
+            .prefetch_related("photos")
+            .filter(
+                Q(name_rus__icontains=query)
+                | Q(lat_name_unique__icontains=query)
+                | Q(rus_name_unique__icontains=query)
+                | Q(species__name__icontains=query)
+                | Q(synonyms__synonym_name__icontains=query)
+            )
+            .distinct()
+        )
+        count = qs.count()
+        page = qs[offset:offset + SEARCH_PAGE_SIZE]
+        return {
+            "count": count,
+            "results": PlantListSerializer(page, many=True).data,
+            "engine": "postgresql",
+        }
+
+
+class SuggestView(APIView):
+    """Мгновенные автоподсказки (edge-ngram). Fallback на PostgreSQL prefix."""
+
+    @extend_schema(
+        parameters=[OpenApiParameter("q", str, required=True)],
+        responses={200: dict},
+    )
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if len(query) < 2:
+            return Response([])
+        if es.is_available():
+            try:
+                return Response(es.suggest(query))
+            except Exception:  # noqa: BLE001
+                pass
+        qs = m.Plant.objects.filter(
+            Q(name_rus__istartswith=query) | Q(lat_name_unique__istartswith=query)
+        )[:10]
+        return Response(
+            [
+                {"id_plant": p.id_plant, "url_slug": p.url_slug,
+                 "name": p.name_rus or p.lat_name_unique}
+                for p in qs
+            ]
+        )

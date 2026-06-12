@@ -190,6 +190,12 @@ AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="")
 AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="https://storage.yandexcloud.net")
 AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="ru-central1")
 
+# ---- imgproxy (HMAC-signed URLs, served via nginx /img/) ----
+IMGPROXY_KEY = env("IMGPROXY_KEY", default="")
+IMGPROXY_SALT = env("IMGPROXY_SALT", default="")
+# Public path prefix the browser hits; nginx /img/ proxies to the imgproxy container.
+IMGPROXY_PUBLIC_PATH = env("IMGPROXY_PUBLIC_PATH", default="/img")
+
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},

@@ -98,11 +98,11 @@ async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
   // Server-side calls hit the backend over plain HTTP inside the Docker network;
   // tell Django the original request was HTTPS (SECURE_PROXY_SSL_HEADER) so its
   // SECURE_SSL_REDIRECT doesn't 302 us to https.
-  const serverHeaders =
+  const serverHeaders: Record<string, string> =
     typeof window === "undefined" ? { "X-Forwarded-Proto": "https" } : {};
   const res = await fetch(`${base()}${path}`, {
     ...init,
-    headers: { Accept: "application/json", ...serverHeaders, ...init?.headers },
+    headers: { Accept: "application/json", ...serverHeaders },
   });
   if (!res.ok) throw new Error(`API ${res.status} ${res.statusText} for ${path}`);
   return res.json() as Promise<T>;

@@ -69,7 +69,7 @@ export function Filters({ facets }: { facets: Facets }) {
         )}
       </div>
 
-      <div className="divide-y divide-line rounded-card border border-line bg-white">
+      <div className="divide-y divide-line rounded-card border border-line bg-white shadow-soft">
         {dims.map((dim, i) => {
           const selected = parseList(sp.get(dim));
           return (
@@ -93,7 +93,7 @@ export function Filters({ facets }: { facets: Facets }) {
                         type="checkbox"
                         checked={selected.includes(f.value)}
                         onChange={() => toggle(dim, f.value)}
-                        className="size-4 accent-[var(--color-brand)]"
+                        className="size-4 accent-brand"
                       />
                       <span className="flex-1">{f.value}</span>
                       <span className="text-muted">{f.count}</span>

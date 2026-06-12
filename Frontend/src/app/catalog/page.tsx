@@ -5,6 +5,7 @@ import { Filters } from "@/components/catalog/Filters";
 import { SortSelect } from "@/components/catalog/SortSelect";
 import { Pagination } from "@/components/catalog/Pagination";
 import { CatalogSearch } from "@/components/catalog/CatalogSearch";
+import { Reveal } from "@/components/Reveal";
 
 export const metadata: Metadata = {
   title: "Каталог растений — PoiskPlant",
@@ -81,9 +82,11 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           </div>
 
           {list.results.length > 0 ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {list.results.map((p) => (
-                <PlantCard key={p.id_plant} plant={p} />
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {list.results.map((p, i) => (
+                <Reveal key={p.id_plant} delay={Math.min(i, 6) * 50}>
+                  <PlantCard plant={p} />
+                </Reveal>
               ))}
             </div>
           ) : (

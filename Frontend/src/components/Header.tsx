@@ -9,17 +9,15 @@ const NAV = [
 
 export function Header() {
   return (
-    <header className="border-b border-line bg-white">
-      <div className="container-page flex h-18 items-center gap-6">
-        {/* Logo */}
-        <Link href="/" className="flex shrink-0 items-center gap-2">
+    <header className="sticky top-0 z-50 border-b border-line/70 bg-white/80 backdrop-blur-md">
+      <div className="container-page flex h-18 items-center gap-5">
+        <Link href="/" className="flex shrink-0 items-center gap-2 transition-transform hover:scale-[1.02]">
           <LeafMark />
-          <span className="font-heading text-xl font-bold text-brand-dark">
+          <span className="font-heading text-xl font-bold tracking-tight text-brand-dark">
             Poisk<span className="text-brand">Plant</span>
           </span>
         </Link>
 
-        {/* Search */}
         <form action="/catalog" className="relative hidden flex-1 md:block">
           <SearchIcon className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted" />
           <input
@@ -27,33 +25,30 @@ export function Header() {
             name="q"
             placeholder="Поиск растения по названию…"
             aria-label="Поиск растения"
-            className="h-11 w-full rounded-control border border-line bg-surface pl-11 pr-4 text-[16px] outline-none transition-colors placeholder:text-muted focus:border-brand focus:bg-white"
+            className="h-11 w-full rounded-control border border-line bg-surface pl-11 pr-4 text-[15px] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-muted focus:border-brand focus:bg-white focus:shadow-[0_0_0_4px_rgba(86,183,107,0.13)]"
           />
         </form>
 
-        {/* City */}
         <button
           type="button"
-          className="hidden shrink-0 items-center gap-1 text-[16px] text-accent-ink hover:text-ink lg:flex"
+          className="hidden shrink-0 items-center gap-1 text-[15px] text-accent-ink transition-colors hover:text-ink lg:flex"
         >
           <PinIcon className="size-4 text-brand" />
           Санкт-Петербург
         </button>
 
-        {/* Nav */}
-        <nav className="hidden items-center gap-5 xl:flex">
+        <nav className="hidden items-center gap-6 xl:flex">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="text-[16px] text-accent-ink transition-colors hover:text-brand"
+              className="relative text-[15px] text-accent-ink transition-colors after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:w-0 after:rounded-full after:bg-brand after:transition-all after:duration-300 after:ease-out hover:text-brand-dark hover:after:w-full"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        {/* Auth (dynamic) */}
         <HeaderAuth />
       </div>
     </header>
@@ -62,7 +57,7 @@ export function Header() {
 
 function LeafMark() {
   return (
-    <span className="grid size-9 place-items-center rounded-control bg-brand text-white">
+    <span className="grid size-9 place-items-center rounded-2xl bg-linear-to-br from-brand-light to-brand text-white shadow-soft">
       <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden>
         <path d="M5 19C5 11 11 5 20 5c0 9-6 15-14 15-1.2 0-1.8-.5-1.8-1.5C4.2 16 7 13 11 11.5 8 14 6.5 16 6 19H5Z" />
       </svg>

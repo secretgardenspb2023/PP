@@ -107,6 +107,7 @@ services:
     depends_on:
       - backend
       - imgproxy
+      - frontend
     restart: unless-stopped
 
   certbot:
@@ -118,9 +119,20 @@ services:
     entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done'
     restart: unless-stopped
 
-  # frontend:                          # ТЗ Этап 6 (Next.js)
-  #   build: ../frontend
-  #   restart: unless-stopped
+  frontend:                            # ТЗ Этап 6 (Next.js SSR)
+    build:
+      context: ../../Frontend
+      args:
+        # relative base → browser calls the API on the same origin (any domain),
+        # which also keeps the auth refresh cookie same-site.
+        NEXT_PUBLIC_API_BASE: /api/v1
+    environment:
+      NODE_ENV: production
+      # server-side (RSC) fetches use the internal backend address
+      API_BASE: http://backend:8000/api/v1
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   pg_data:

@@ -39,8 +39,19 @@ server {
         proxy_cache img_cache;
         proxy_cache_valid 200 30d;
     }
-    location / {
+    # API, admin and DRF schema stay on Django.
+    location /api/ {
         proxy_pass http://backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+    location /admin/ {
+        proxy_pass http://backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
+    # Everything else is the Next.js frontend (SSR), incl. /_next/ assets.
+    location / {
+        proxy_pass http://frontend;
         include /etc/nginx/snippets/proxy.conf;
     }
 }

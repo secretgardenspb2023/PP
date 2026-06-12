@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* PoiskPlant design tokens — source: docs/design-tokens.md (Figma UI-kit).
+   Token names mirror the Figma style names where practical. */
+@theme {
+  /* Brand greens */
+  --color-brand: #56b76b;        /* green — primary accent */
+  --color-brand-light: #70e68a;  /* light green — hover */
+  --color-brand-dark: #30623b;   /* dark green — pressed / on-accent headings */
+  --color-brand-muted: #a9c2af;  /* disabled */
+
+  /* Status */
+  --color-danger: #f63131;       /* red — errors, red-book status */
+  --color-warning: #d6d801;      /* yellow */
+
+  /* Text & neutrals */
+  --color-ink: #303030;          /* black txt — primary text */
+  --color-muted: #898989;        /* txt — secondary text */
+  --color-accent-ink: #616161;   /* accent txt / grey 40 */
+  --color-grey-20: #c8c8c8;
+  --color-line: #d9d9d9;         /* stroke — borders, dividers */
+  --color-surface: #f7f7f7;      /* grey 00 — section backgrounds */
+
+  /* Typography — wired to next/font in layout.tsx */
+  --font-sans: var(--font-noto), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-rubik), var(--font-noto), sans-serif;
+
+  /* Radii (Figma: 8/12/25/pill) */
+  --radius-card: 12px;
+  --radius-control: 25px;
+}
+
+/* Centered content column — Figma desktop container ≈ 1140px, 12-col grid. */
+@utility container-page {
+  width: 100%;
+  max-width: 1140px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+@layer components {
+  .auth-input {
+    height: 2.75rem;
+    width: 100%;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--color-line);
+    padding-inline: 1rem;
+    font-size: 16px;
+    color: var(--color-ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .auth-input:focus {
+    border-color: var(--color-brand);
+  }
+}
+
+@layer base {
+  body {
+    background: var(--color-white, #fff);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3 {
+    font-family: var(--font-heading);
+    color: var(--color-ink);
+  }
+}

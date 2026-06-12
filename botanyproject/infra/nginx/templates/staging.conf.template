@@ -37,6 +37,8 @@ server {
     location /img/ {
         proxy_pass http://imgproxy/;
         proxy_cache img_cache;
+        # vary cached variants by Accept so WebP/AVIF/JPEG don't collide
+        proxy_cache_key "$request_uri|$http_accept";
         proxy_cache_valid 200 30d;
     }
     # API, admin and DRF schema stay on Django.

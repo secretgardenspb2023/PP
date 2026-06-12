@@ -9,6 +9,17 @@ def _names(manager, attr="name"):
     return [getattr(link.value, attr) for link in manager.all()]
 
 
+def display_name(plant):
+    """Russian display name: explicit name_rus, else the canonical Russian binomial
+    (genus + species rus_name) — populated for the ~11% of cards with blank name_rus
+    — else the latin name. Mirrors the fallback used in search results."""
+    if plant.name_rus:
+        return plant.name_rus
+    species = plant.species
+    rus_binomial = " ".join(filter(None, [species.genus.rus_name, species.rus_name]))
+    return rus_binomial or plant.lat_name_unique or f"#{plant.pk}"
+
+
 class PlantListSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     species = serializers.CharField(source="species.name", read_only=True)
@@ -24,7 +35,7 @@ class PlantListSerializer(serializers.ModelSerializer):
         ]
 
     def get_name(self, obj):
-        return obj.name_rus or obj.lat_name_unique or f"#{obj.pk}"
+        return display_name(obj)
 
     def get_genus(self, obj):
         genus = obj.species.genus
@@ -42,10 +53,15 @@ class PlantListSerializer(serializers.ModelSerializer):
         return main.preview_url or main.public_url
 
 
-class PlantSynonymSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = m.PlantSynonym
-        fields = ["synonym_name", "full_name", "synonym_lang", "synonym_type", "is_binomial"]
+def _synonym(s, level):
+    return {
+        "synonym_name": s.synonym_name,
+        "full_name": s.full_name,
+        "synonym_lang": s.synonym_lang,
+        "synonym_type": s.synonym_type,
+        "is_binomial": s.is_binomial,
+        "level": level,  # genus | species | plant — see docs/plant-card-matrix.md
+    }
 
 
 class PlantPhotoSerializer(serializers.ModelSerializer):
@@ -71,7 +87,7 @@ class PlantDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_name(self, obj):
-        return obj.name_rus or obj.lat_name_unique or f"#{obj.pk}"
+        return display_name(obj)
 
     def get_taxonomy(self, obj):
         species = obj.species
@@ -121,6 +137,9 @@ class PlantDetailSerializer(serializers.ModelSerializer):
                 "disease_resistant": care.care_disease_resistant,
                 "pest_resistant": care.care_pest_resistant,
                 "no_shelter": care.care_no_shelter_boolean,
+                "city_tolerant": care.care_city,
+                "no_digging": care.care_no_digging_boolean,
+                "no_watering": care.care_no_watering_boolean,
             }
         if design:
             data |= {
@@ -134,21 +153,30 @@ class PlantDetailSerializer(serializers.ModelSerializer):
         return data
 
     def get_descriptions(self, obj):
+        # Per the card matrix (docs/plant-card-matrix.md): content_text and
+        # interesting_facts are intentionally excluded.
         d = getattr(obj, "description", None)
         if not d:
             return {}
         return {
-            "content": d.content_text,
             "requirements": d.requirements,
             "problems": d.problems,
             "diseases_pests": d.diseases_pests,
             "propagation": d.propagation,
             "usage": d.usage_info,
-            "interesting_facts": d.interesting_facts,
         }
 
     def get_synonyms(self, obj):
-        return PlantSynonymSerializer(obj.synonyms.all(), many=True).data
+        # Synonyms are polymorphic (one of genus/species/plant). Inherit the genus-
+        # and species-level (binomial) synonyms into the card, plus plant-level ones
+        # (matrix: "синонимы уровня род и род-вид"). See docs/plant-card-matrix.md.
+        species = obj.species
+        genus = species.genus
+        return [
+            *(_synonym(s, "genus") for s in genus.synonyms.all()),
+            *(_synonym(s, "species") for s in species.synonyms.all()),
+            *(_synonym(s, "plant") for s in obj.synonyms.all()),
+        ]
 
     def get_photos(self, obj):
         return PlantPhotoSerializer(obj.photos.all(), many=True).data

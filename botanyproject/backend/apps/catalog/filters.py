@@ -50,7 +50,8 @@ SORTS = {
 
 SEARCH_FIELDS = [
     "name_rus", "lat_name_unique", "rus_name_unique", "url_slug",
-    "species__name", "species__genus__name", "species__genus__rus_name",
+    "species__name", "species__rus_name",
+    "species__genus__name", "species__genus__rus_name",
 ]
 
 

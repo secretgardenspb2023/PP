@@ -54,7 +54,11 @@ def _detail_queryset():
         m.Plant.objects.select_related(
             "species__genus__family", "visual", "care", "design", "description"
         )
-        .prefetch_related("photos", "synonyms", *prefetches)
+        # synonyms inherited from three taxonomic levels (matrix) — prefetch each
+        .prefetch_related(
+            "photos", "synonyms", "species__synonyms", "species__genus__synonyms",
+            *prefetches,
+        )
     )
 
 

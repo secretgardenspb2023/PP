@@ -57,3 +57,4 @@ export async function me(token: string): Promise<User> {
 }
 
 export const googleLoginUrl = `${API}/auth/google/`;
+export const vkLoginUrl = `${API}/auth/vk/`;

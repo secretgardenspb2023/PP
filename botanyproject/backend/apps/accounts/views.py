@@ -24,15 +24,18 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from . import captcha, oauth
+from . import audit, captcha, oauth
+from .models import PROVIDER_GOOGLE, PROVIDER_TELEGRAM, PROVIDER_VK
 from .serializers import (
     EmailVerifySerializer,
     LoginSerializer,
     OTPSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetSerializer,
+    ProfileUpdateSerializer,
     RegisterSerializer,
     UserSerializer,
 )
@@ -103,6 +106,7 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        audit.log_event("register", request=request, user=user)
         _send_token_email(
             user, "Подтверждение регистрации PoiskPlant",
             "Подтвердите ваш email по ссылке:", "/verify-email",
@@ -127,6 +131,7 @@ class VerifyEmailView(APIView):
         if not user.is_active:
             user.is_active = True
             user.save(update_fields=["is_active"])
+        audit.log_event("email_verified", request=request, user=user)
         return Response({"detail": "Email подтверждён."})
 
 
@@ -138,22 +143,26 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
         try:
             # Pass the underlying Django HttpRequest so django-axes can read the
             # client IP and record attempts (it does not understand DRF's Request).
             user = authenticate(
                 getattr(request, "_request", request),
-                username=serializer.validated_data["email"],
+                username=email,
                 password=serializer.validated_data["password"],
             )
         except PermissionDenied:  # django-axes lockout (ТЗ 3.7)
+            audit.log_event("login_locked", request=request, email=email)
             return Response(
                 {"detail": "Слишком много попыток входа. Попробуйте позже."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
         if user is None:
+            audit.log_event("login_failed", request=request, email=email)
             return Response({"detail": "Неверный email или пароль."}, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_active:
+            audit.log_event("login_inactive", request=request, user=user)
             return Response({"detail": "Email не подтверждён."}, status=status.HTTP_403_FORBIDDEN)
 
         # Second factor for staff with a confirmed TOTP device (ТЗ 3.12).
@@ -166,8 +175,10 @@ class LoginView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
             if not device.verify_token(otp):
+                audit.log_event("login_2fa_failed", request=request, user=user)
                 return Response({"detail": "Неверный код 2FA."}, status=status.HTTP_401_UNAUTHORIZED)
 
+        audit.log_event("login_success", request=request, user=user)
         return _tokens_response(user, body_extra={"user": UserSerializer(user).data})
 
 
@@ -202,6 +213,7 @@ class LogoutView(APIView):
                 RefreshToken(token).blacklist()
             except (TokenError, AttributeError):
                 pass
+        audit.log_event("logout", request=request)
         response = Response({"detail": "Выход выполнен."})
         response.delete_cookie(settings.AUTH_REFRESH_COOKIE, path=settings.AUTH_REFRESH_COOKIE_PATH)
         return response
@@ -218,6 +230,8 @@ class PasswordResetView(APIView):
         serializer = PasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = User.objects.filter(email__iexact=serializer.validated_data["email"]).first()
+        audit.log_event("password_reset_requested", request=request,
+                        email=serializer.validated_data["email"])
         if user is not None:
             _send_token_email(
                 user, "Сброс пароля PoiskPlant",
@@ -244,14 +258,94 @@ class PasswordResetConfirmView(APIView):
         if not user.is_active:
             user.is_active = True
         user.save()
+        audit.log_event("password_reset_done", request=request, user=user)
         return Response({"detail": "Пароль изменён."})
 
 
 class MeView(APIView):
+    """Profile read + edit (ТЗ 3.11). GET returns the current user; PATCH edits
+    the editable fields (name, phone) — email/login are identity and not editable."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        audit.log_event("profile_updated", request=request, user=request.user)
+        return Response(UserSerializer(request.user).data)
+
+
+# --------------------------------------------------------------------------- #
+#  Linked socials + active sessions (ТЗ Этап 3.11)
+# --------------------------------------------------------------------------- #
+class SocialAccountsView(APIView):
+    """List the user's linked social account(s) and allow unlinking.
+
+    The client table stores a single social link (``social_provider``/``social_id``),
+    so the list is 0 or 1 entry. Unlinking is refused for social-only accounts with
+    no usable password — otherwise the user would lock themselves out."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        linked = (
+            [{"provider": u.social_provider, "social_id": u.social_id}]
+            if u.social_provider else []
+        )
+        return Response({"linked": linked, "has_password": u.has_usable_password()})
+
+    def delete(self, request):
+        u = request.user
+        if not u.social_provider:
+            return Response({"detail": "Соц-сеть не привязана."}, status=status.HTTP_400_BAD_REQUEST)
+        if not u.has_usable_password():
+            return Response(
+                {"detail": "Сначала задайте пароль — иначе вход будет невозможен."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        provider = u.social_provider
+        u.social_provider = None
+        u.social_id = None
+        u.save(update_fields=["social_provider", "social_id"])
+        audit.log_event("social_unlinked", request=request, user=u, provider=provider)
+        return Response({"detail": "Соц-сеть отвязана."})
+
+
+class SessionsView(APIView):
+    """List active sessions (outstanding, non-blacklisted refresh tokens) and let
+    the user revoke all *other* sessions ("log out everywhere else", ТЗ 3.11)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _active(self, user):
+        from django.utils import timezone
+        revoked = BlacklistedToken.objects.values_list("token_id", flat=True)
+        return (
+            OutstandingToken.objects.filter(user=user, expires_at__gt=timezone.now())
+            .exclude(id__in=revoked)
+            .order_by("-created_at")
+        )
+
+    def get(self, request):
+        sessions = [
+            {"jti": t.jti, "created_at": t.created_at, "expires_at": t.expires_at}
+            for t in self._active(request.user)
+        ]
+        return Response({"sessions": sessions})
+
+    def delete(self, request):
+        """Revoke every active session for the user (blacklist all refresh tokens)."""
+        count = 0
+        for token in self._active(request.user):
+            _, created = BlacklistedToken.objects.get_or_create(token=token)
+            count += int(created)
+        audit.log_event("sessions_revoked", request=request, user=request.user, count=count)
+        return Response({"detail": "Все сессии завершены.", "revoked": count})
 
 
 def _decode_uid_pk(pk):
@@ -289,6 +383,7 @@ class TwoFactorConfirmView(APIView):
         device.save(update_fields=["confirmed"])
         # keep a single confirmed device
         TOTPDevice.objects.filter(user=request.user, confirmed=True).exclude(pk=device.pk).delete()
+        audit.log_event("2fa_enabled", request=request, user=request.user)
         return Response({"detail": "2FA включена."})
 
 
@@ -304,6 +399,7 @@ class TwoFactorDisableView(APIView):
         if not device.verify_token(serializer.validated_data["otp"]):
             return Response({"detail": "Неверный код."}, status=status.HTTP_400_BAD_REQUEST)
         TOTPDevice.objects.filter(user=request.user).delete()
+        audit.log_event("2fa_disabled", request=request, user=request.user)
         return Response({"detail": "2FA отключена."})
 
 
@@ -351,7 +447,8 @@ class GoogleCallbackView(APIView):
             return Response({"detail": "Не удалось получить профиль Google."}, status=status.HTTP_502_BAD_GATEWAY)
         if not profile.get("email") or not profile["email_verified"]:
             return Response({"detail": "Google не подтвердил email."}, status=status.HTTP_400_BAD_REQUEST)
-        user = oauth.link_or_create_by_email(profile["email"], profile["name"], "google", profile["sub"])
+        user = oauth.link_or_create_by_email(profile["email"], profile["name"], PROVIDER_GOOGLE, profile["sub"])
+        audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_GOOGLE)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
         _set_refresh_cookie(response, RefreshToken.for_user(user))
         return response
@@ -376,5 +473,46 @@ class TelegramLoginView(APIView):
         except ValueError:
             return Response({"detail": "Некорректные данные."}, status=status.HTTP_400_BAD_REQUEST)
         name = " ".join(filter(None, [data.get("first_name"), data.get("last_name")]))
-        user = oauth.get_or_create_social("telegram", data["id"], name=name)
+        user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name)
+        audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_TELEGRAM)
         return _tokens_response(user, body_extra={"user": UserSerializer(user).data})
+
+
+class VKLoginView(APIView):
+    """Redirect the browser to the VK consent screen."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not settings.VK_APP_ID:
+            return Response({"detail": "VK-вход не настроен."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        state = get_random_string(32)
+        request.session["vk_oauth_state"] = state
+        return redirect(oauth.vk_auth_url(state))
+
+
+class VKCallbackView(APIView):
+    """Exchange the code, key by VK id (merge by email when VK provides one),
+    set the refresh cookie and bounce back to the frontend."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if request.query_params.get("error"):
+            return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
+        code = request.query_params.get("code", "")
+        state = request.query_params.get("state", "")
+        saved = request.session.pop("vk_oauth_state", None)
+        if not code or not saved or not constant_time_compare(state, saved):
+            return Response({"detail": "Некорректный OAuth-ответ."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            profile = oauth.vk_exchange(code)
+        except Exception:  # noqa: BLE001 — upstream/network failure
+            return Response({"detail": "Не удалось получить профиль VK."}, status=status.HTTP_502_BAD_GATEWAY)
+        user = oauth.get_or_create_social(
+            PROVIDER_VK, profile["id"], email=profile.get("email"), name=profile["name"]
+        )
+        audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_VK)
+        response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
+        _set_refresh_cookie(response, RefreshToken.for_user(user))
+        return response

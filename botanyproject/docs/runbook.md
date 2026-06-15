@@ -56,6 +56,29 @@ docker compose exec backend python manage.py normalize_catalog --flush  # пер
 
 Команда чистит опечатки/дубли и логирует всё, что не сконвертировалось.
 
+## Очистка осиротевших медиа в S3 (ТЗ 4.8)
+
+Объекты бакета под префиксом, на которые не ссылается ни одна `media.plant_photos`.
+По умолчанию **dry-run** (только показывает); реальное удаление — флаг `--delete`:
+
+```bash
+docker compose exec backend python manage.py cleanup_orphans                 # dry-run
+docker compose exec backend python manage.py cleanup_orphans --delete         # удалить
+docker compose exec backend python manage.py cleanup_orphans --prefix plants/ --limit 100
+```
+
+## Auth-эндпоинты профиля и сессий (ТЗ 3.10/3.11)
+
+- `GET/PATCH /api/v1/auth/me/` — профиль (PATCH: `full_name`, `phone`).
+- `GET/DELETE /api/v1/auth/me/socials/` — список привязанных соцсетей и отвязка
+  (отвязка запрещена, если нет пароля — иначе вход станет невозможен).
+- `GET/DELETE /api/v1/auth/me/sessions/` — активные сессии (непогашенные refresh-токены);
+  DELETE завершает все сессии («выйти на всех устройствах»).
+- VK-вход: `GET /api/v1/auth/vk/` → редирект на VK; `…/vk/callback/` — обмен кода.
+- Auth-события (вход/выход/регистрация/сброс/2FA/привязки) пишутся логгером
+  `apps.accounts.audit` в stdout → Docker json-file логи. Просмотр:
+  `docker compose logs backend | grep accounts.audit`.
+
 ## Тесты и БД
 
 `pytest` создаёт тестовую БД только если тест запрашивает БД-фикстуру. Тесты, читающие

@@ -39,9 +39,9 @@ imgproxy, кэш и брокер задач — Redis + Celery.
 |------|--------------------------------------------|--------|
 | 1    | Инфраструктура, безопасность, интеграция БД| 🟡 локальный Docker dev поднят и проверен; серверная часть ждёт VPS |
 | 2    | Каркас backend                             | 🟡 каркас готов и загружается (health 200) |
-| 3    | Авторизация (Email + Google + VK + Telegram)| 🟡 email + JWT/refresh-cookie + throttle + axes + 2FA + **Google (redirect)** + **Telegram (подпись)** + **SmartCaptcha**; VK ждёт регистрацию, привязка к user_info.users — далее |
-| 4    | Медиа-система (S3 + imgproxy)              | ⬜ ждёт S3-доступы (фото пока в media.tmp_donor_photos) |
-| 5    | API, поиск (ES), фасеточные фильтры        | 🟢 модели+нормализация+read-API+фасеты+ES-поиск (морфология/опечатки/подсказки/подсветка)+Redis-кэш. Опц.: плагин-лемматизатор в ES |
+| 3    | Авторизация (Email + Google + VK + Telegram)| 🟢 email + JWT/refresh-cookie + throttle + axes + 2FA + **Google** + **Telegram** + **VK (redirect, ключи заказчика на сервере)** + SmartCaptcha + привязка User → `user_info.users` + **логирование auth-событий (3.10)** + **профиль: правка/список+отвязка соцсетей/активные сессии (3.11)** |
+| 4    | Медиа-система (S3 + imgproxy)              | 🟢 миграция фото донор→S3 (`migrate_photos`) + imgproxy v3 (AUTO_WEBP/AVIF) + **пресеты thumbnail/card/full/hero (4.6)** + **очистка осиротевших `cleanup_orphans --dry-run/--delete` (4.8)** |
+| 5    | API, поиск (ES), фасеточные фильтры        | 🟢 модели+нормализация+read-API+фасеты+**гистограммы диапазонов (5.14)**+ES-поиск (морфология/опечатки/синонимы/подсказки/подсветка)+Redis-кэш. Опц.: плагин-лемматизатор в ES |
 | 6    | Frontend (Next.js)                         | ⬜ ждёт Figma/брендинг |
 | 7    | Расширенная админка                        | ⬜ |
 | 8    | SEO, аналитика, производительность         | ⬜ |
@@ -52,8 +52,11 @@ imgproxy, кэш и брокер задач — Redis + Celery.
 ## Блокеры (ждём от заказчика)
 
 - ~~Дамп схемы `plant.plants`~~ — **получен** (`dump-botany_db-202606041900.sql`), смаплен read-only.
+- ~~Дамп схемы `user_info`~~ — **получен** (в том же дампе): `user_info.users` + `dict_roles`;
+  модель `User` привязана (этап 3), см. docs/database.md.
 - Согласование схемы: новые колонки (status/author/updated_at) + нормализация jsonb→справочники — см. docs/database.md.
 - VPS HandyHost, домен/DNS — блокируют серверную часть этапа 1.
-- OAuth (Google/VK/Telegram), SmartCaptcha — блокируют этап 3.
-- S3-доступы — блокируют этап 4.
+- ~~OAuth Google/Telegram, SmartCaptcha~~ — готово. ~~**VK** (ключи приложения VK ID)~~ — ключи получены, лежат в серверном `.env`; код VK-входа готов (classic `oauth.vk.com` flow), redirect проверяется на staging, полный вход с согласием — на приёмке заказчиком.
+- Админ-аккаунт заказчика в `user_info.users` (ТЗ 3.2) — заведём по `createsuperuser`, когда заказчик даст логин/email/пароль.
+- ~~S3-доступы~~ — получены, этап 4 закрыт.
 - Figma-подтверждение + брендинг — блокируют этап 6.

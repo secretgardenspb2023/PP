@@ -5,7 +5,10 @@ Multi-select inside a dimension is OR (``__in``); across dimensions it is AND
 *other* filter applied but the dimension itself excluded — the marketplace
 behaviour, so picking one value does not zero out its siblings.
 """
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Min, Q
+
+# Number of bars in a range-filter distribution histogram (ТЗ 5.14).
+HISTOGRAM_BUCKETS = 8
 
 # query param -> queryset path to the dictionary value name
 DIMENSIONS = {
@@ -71,7 +74,7 @@ def _bool(value):
     return str(value).lower() in ("1", "true", "yes", "on")
 
 
-def apply_filters(qs, params, *, exclude=None):
+def apply_filters(qs, params, *, exclude=None, exclude_range=None):
     q = params.get("q")
     if q:
         search = Q()
@@ -87,6 +90,8 @@ def apply_filters(qs, params, *, exclude=None):
             qs = qs.filter(**{f"{path}__in": values})
 
     for prefix, field in RANGES.items():
+        if prefix == exclude_range:
+            continue
         lo = _to_int(params.get(f"{prefix}_min"))
         hi = _to_int(params.get(f"{prefix}_max"))
         if lo is not None:
@@ -121,3 +126,49 @@ def facet_counts(base_qs, params):
             if row[path] is not None
         ]
     return facets
+
+
+def histograms(base_qs, params):
+    """Distribution of each range field for slider histograms (ТЗ 5.14).
+
+    Returns ``{prefix: {min, max, buckets: [{from, to, count}, …]}}``. Like facets,
+    each range respects every *other* active filter but excludes its own min/max,
+    so dragging a slider does not reshape its own distribution chart.
+    """
+    out = {}
+    for prefix, field in RANGES.items():
+        qs = apply_filters(base_qs, params, exclude_range=prefix).filter(
+            **{f"{field}__isnull": False}
+        )
+        bounds = qs.aggregate(lo=Min(field), hi=Max(field))
+        lo, hi = bounds["lo"], bounds["hi"]
+        if lo is None or hi is None:
+            out[prefix] = {"min": None, "max": None, "buckets": []}
+            continue
+        if hi == lo:
+            out[prefix] = {
+                "min": lo, "max": hi,
+                "buckets": [{"from": lo, "to": hi, "count": qs.count()}],
+            }
+            continue
+        width = (hi - lo) / HISTOGRAM_BUCKETS
+        edges = [lo + width * i for i in range(HISTOGRAM_BUCKETS + 1)]
+        edges[-1] = hi  # avoid float drift dropping the top value
+        # One aggregate query per range: a conditional count per bucket.
+        annotations = {}
+        for i in range(HISTOGRAM_BUCKETS):
+            cond = Q(**{f"{field}__gte": edges[i]})
+            # Last bucket is closed on the right; the others are half-open.
+            upper = "lte" if i == HISTOGRAM_BUCKETS - 1 else "lt"
+            cond &= Q(**{f"{field}__{upper}": edges[i + 1]})
+            annotations[f"b{i}"] = Count("pk", filter=cond, distinct=True)
+        row = qs.aggregate(**annotations)
+        out[prefix] = {
+            "min": lo, "max": hi,
+            "buckets": [
+                {"from": round(edges[i], 1), "to": round(edges[i + 1], 1),
+                 "count": row[f"b{i}"]}
+                for i in range(HISTOGRAM_BUCKETS)
+            ],
+        }
+    return out

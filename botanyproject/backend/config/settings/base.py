@@ -173,6 +173,12 @@ GOOGLE_REDIRECT_URI = env(
 )
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", default="")
 TELEGRAM_BOT_USERNAME = env("TELEGRAM_BOT_USERNAME", default="")
+VK_APP_ID = env("VK_APP_ID", default="")
+VK_SECURE_KEY = env("VK_SECURE_KEY", default="")
+VK_SERVICE_TOKEN = env("VK_SERVICE_TOKEN", default="")
+VK_REDIRECT_URI = env(
+    "VK_REDIRECT_URI", default="http://localhost:8000/api/v1/auth/vk/callback/"
+)
 
 # ---- Yandex SmartCaptcha (ТЗ Этап 3.8) ----
 SMARTCAPTCHA_SERVER_KEY = env("SMARTCAPTCHA_SERVER_KEY", default="")

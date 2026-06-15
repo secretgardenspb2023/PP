@@ -12,7 +12,9 @@ from rest_framework.views import APIView
 
 from . import models as m
 from . import search as es
-from .filters import DIMENSIONS, RANGES, SORTS, apply_filters, facet_counts
+from .filters import (
+    DIMENSIONS, RANGES, SORTS, apply_filters, facet_counts, histograms,
+)
 from .serializers import PlantDetailSerializer, PlantListSerializer
 
 SEARCH_PAGE_SIZE = 24
@@ -110,6 +112,21 @@ class PlantViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Ge
         data = cache.get(key)
         if data is None:
             data = facet_counts(m.Plant.objects.all(), request.query_params)
+            cache.set(key, data, timeout=600)
+        return Response(data)
+
+    @extend_schema(
+        parameters=_FILTER_PARAMS,
+        description="Гистограммы распределения диапазонных фильтров (высота, диаметр, "
+        "прирост) с учётом остальных активных фильтров (ТЗ 5.14).",
+    )
+    @action(detail=False)
+    def histograms(self, request):
+        params = sorted(request.query_params.items())
+        key = "histograms:" + hashlib.md5(urlencode(params).encode()).hexdigest()  # noqa: S324
+        data = cache.get(key)
+        if data is None:
+            data = histograms(m.Plant.objects.all(), request.query_params)
             cache.set(key, data, timeout=600)
         return Response(data)
 

@@ -18,6 +18,11 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
+VK_AUTH_URL = "https://oauth.vk.com/authorize"
+VK_TOKEN_URL = "https://oauth.vk.com/access_token"
+VK_USERS_URL = "https://api.vk.com/method/users.get"
+VK_API_VERSION = "5.131"
+
 
 def google_auth_url(state):
     params = {
@@ -67,6 +72,57 @@ def google_exchange(code):
         "email_verified": bool(info.get("email_verified")),
         "name": info.get("name", ""),
     }
+
+
+def _get_url(url):
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
+def vk_auth_url(state):
+    params = {
+        "client_id": settings.VK_APP_ID,
+        "redirect_uri": settings.VK_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "email",
+        "state": state,
+        "v": VK_API_VERSION,
+        "display": "page",
+    }
+    return f"{VK_AUTH_URL}?{urllib.parse.urlencode(params)}"
+
+
+def vk_exchange(code):
+    """Exchange a VK authorization code for the profile (id, email, name).
+
+    VK returns the email in the token response only when the user granted the
+    `email` scope and has one — otherwise we key by VK id (см. get_or_create_social).
+    """
+    token = _get_url(
+        f"{VK_TOKEN_URL}?"
+        + urllib.parse.urlencode(
+            {
+                "client_id": settings.VK_APP_ID,
+                "client_secret": settings.VK_SECURE_KEY,
+                "redirect_uri": settings.VK_REDIRECT_URI,
+                "code": code,
+            }
+        )
+    )
+    uid = token["user_id"]
+    name = ""
+    try:
+        info = _get_url(
+            f"{VK_USERS_URL}?"
+            + urllib.parse.urlencode(
+                {"user_ids": uid, "access_token": token["access_token"], "v": VK_API_VERSION}
+            )
+        )
+        u = info["response"][0]
+        name = " ".join(filter(None, [u.get("first_name"), u.get("last_name")]))
+    except Exception:  # noqa: BLE001 — name is optional
+        pass
+    return {"id": str(uid), "email": token.get("email"), "name": name}
 
 
 def verify_telegram(data, bot_token):

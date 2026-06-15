@@ -32,12 +32,30 @@ def imgproxy_url(source: str, processing: str) -> str:
     return f"{base}/{_b64(digest)}{path}"
 
 
-# Catalog presets. fit keeps aspect; quality tuned for plant photos.
+# Catalog presets (ТЗ 4.6): thumbnail 200 / card 400 / full 1200 / hero 2000.
+# `fit` keeps aspect (detail/hero), `fill` crops to a fixed box (grid thumbs);
+# quality tuned for plant photos. WebP/AVIF is negotiated by imgproxy via Accept.
+def thumbnail(key: str) -> str:
+    """200px square thumbnail (lists, admin previews)."""
+    return imgproxy_url(s3_source(key), "rs:fill:200:200:0/q:75")
+
+
+def card(key: str) -> str:
+    """400px card image for the catalog grid (4:3-ish, cropped to fill)."""
+    return imgproxy_url(s3_source(key), "rs:fill:400:300:0/q:78")
+
+
 def full(key: str) -> str:
-    """Large image for the plant card page."""
-    return imgproxy_url(s3_source(key), "rs:fit:1600:1600:0/q:82")
+    """1200px image for the plant card page."""
+    return imgproxy_url(s3_source(key), "rs:fit:1200:1200:0/q:82")
 
 
+def hero(key: str) -> str:
+    """2000px hero image."""
+    return imgproxy_url(s3_source(key), "rs:fit:2000:2000:0/q:82")
+
+
+# Backward-compatible alias: existing callers (migrate_photos / serializers) use
+# `thumb` for the grid preview, which is now the `card` preset.
 def thumb(key: str) -> str:
-    """Card thumbnail (4:3-ish), cropped to fill."""
-    return imgproxy_url(s3_source(key), "rs:fill:600:450:0/q:78")
+    return card(key)

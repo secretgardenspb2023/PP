@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { googleLoginUrl } from "@/lib/auth";
+import { googleLoginUrl, vkLoginUrl } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -71,12 +71,20 @@ export default function LoginPage() {
             <span className="absolute inset-x-0 top-1/2 border-t border-line" />
           </div>
 
-          <a
-            href={googleLoginUrl}
-            className="flex h-11 items-center justify-center gap-2 rounded-control border border-line font-medium text-ink transition-colors hover:border-brand"
-          >
-            Войти через Google
-          </a>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={googleLoginUrl}
+              className="flex h-11 items-center justify-center gap-2 rounded-control border border-line font-medium text-ink transition-colors hover:border-brand"
+            >
+              Google
+            </a>
+            <a
+              href={vkLoginUrl}
+              className="flex h-11 items-center justify-center gap-2 rounded-control border border-line font-medium text-ink transition-colors hover:border-brand"
+            >
+              ВКонтакте
+            </a>
+          </div>
         </form>
 
         <p className="mt-4 text-center text-[15px] text-muted">

@@ -8,20 +8,40 @@ findable and shown by its canonical Russian binomial (genus + species rus_name).
 from types import SimpleNamespace
 
 from apps.catalog.search import build_document
-from apps.catalog.serializers import PlantDetailSerializer
+from apps.catalog.serializers import PlantDetailSerializer, display_name
 
 
 def _plant(*, name_rus, genus_rus, species_rus, genus_lat="Quercus",
-           species_lat="robur", lat_name="Quercus robur"):
+           species_lat="robur", lat_name="Quercus robur", rus_name_unique=""):
     family = SimpleNamespace(family_lat="Fagaceae", family_rus="Буковые")
     genus = SimpleNamespace(name=genus_lat, rus_name=genus_rus, family=family)
     species = SimpleNamespace(name=species_lat, rus_name=species_rus, genus=genus)
     return SimpleNamespace(
         id_plant=9760, url_slug="quercus-robur", species=species,
-        name_rus=name_rus, lat_name_unique=lat_name, usda_zone=5,
+        name_rus=name_rus, rus_name_unique=rus_name_unique,
+        lat_name_unique=lat_name, usda_zone=5,
         synonyms=SimpleNamespace(all=lambda: []),
         description=None,
     )
+
+
+def test_display_name_prefers_rus_name_unique():
+    """По решению заказчика заголовок берётся из rus_name_unique (включает сорт)."""
+    plant = _plant(name_rus="Дуб обыкновенный", genus_rus="Дуб",
+                   species_rus="черешчатый", rus_name_unique="Дуб черешчатый Fastigiata")
+    assert display_name(plant) == "Дуб черешчатый Fastigiata"
+    # индексируется и попадает в автоподсказки
+    doc = build_document(plant)
+    assert doc["rus_name_unique"] == "Дуб черешчатый Fastigiata"
+    assert "Дуб черешчатый Fastigiata" in doc["suggest"]
+
+
+def test_display_name_falls_back_when_rus_name_unique_blank():
+    """Без rus_name_unique — прежняя подстраховка (name_rus, биномен, латынь)."""
+    assert display_name(_plant(name_rus="Дуб обыкновенный", genus_rus="Дуб",
+                               species_rus="черешчатый")) == "Дуб обыкновенный"
+    assert display_name(_plant(name_rus="", genus_rus="Дуб",
+                               species_rus="черешчатый")) == "Дуб черешчатый"
 
 
 def test_russian_binomial_indexed_when_name_rus_blank():

@@ -42,6 +42,8 @@ INDEX_BODY = {
             "id_plant": {"type": "integer"},
             "url_slug": {"type": "keyword"},
             "name_rus": {"type": "text", "analyzer": "ru"},
+            # Каноническое отображаемое имя карточки (заполнено для всех, включает сорт).
+            "rus_name_unique": {"type": "text", "analyzer": "ru"},
             # Canonical Russian binomial assembled from taxonomy (genus + species
             # rus_name) — populated even when plants.name_rus is blank (~11%).
             "name_rus_full": {"type": "text", "analyzer": "ru"},
@@ -64,7 +66,7 @@ INDEX_BODY = {
 }
 
 SEARCH_FIELDS = [
-    "name_rus^5", "name_rus_full^5", "synonyms^4", "lat_name^3",
+    "rus_name_unique^5", "name_rus^5", "name_rus_full^5", "synonyms^4", "lat_name^3",
     "genus^2", "genus_rus^2", "species_rus^2", "family^2",
     "species", "description",
 ]
@@ -88,6 +90,7 @@ def build_document(plant):
     description = getattr(plant, "description", None)
     synonyms = [s.full_name or s.synonym_name for s in plant.synonyms.all()]
     name_rus = plant.name_rus or ""
+    rus_name_unique = plant.rus_name_unique or ""
     lat_name = plant.lat_name_unique or ""
     genus_rus = genus.rus_name or ""
     species_rus = species.rus_name or ""
@@ -101,6 +104,7 @@ def build_document(plant):
         "id_plant": plant.id_plant,
         "url_slug": plant.url_slug,
         "name_rus": name_rus,
+        "rus_name_unique": rus_name_unique,
         "name_rus_full": name_rus_full,
         "lat_name": lat_name,
         "species": species.name,
@@ -112,7 +116,7 @@ def build_document(plant):
         "description": (description.content_text if description else "") or "",
         "usda_zone": plant.usda_zone,
         # Russian name (explicit + taxonomic) + latin + synonyms feed autosuggest (ТЗ 5.6/5.7)
-        "suggest": " ".join(filter(None, [name_rus, name_rus_full, lat_name, *synonyms])),
+        "suggest": " ".join(filter(None, [rus_name_unique, name_rus, name_rus_full, lat_name, *synonyms])),
     }
 
 
@@ -160,8 +164,8 @@ def search(query, *, size=24, offset=0, client=None):
             {
                 "id_plant": h["_source"]["id_plant"],
                 "url_slug": h["_source"]["url_slug"],
-                "name": (h["_source"]["name_rus"] or h["_source"].get("name_rus_full")
-                         or h["_source"]["lat_name"]),
+                "name": (h["_source"].get("rus_name_unique") or h["_source"]["name_rus"]
+                         or h["_source"].get("name_rus_full") or h["_source"]["lat_name"]),
                 "lat_name": h["_source"]["lat_name"],
                 "family": h["_source"]["family"],
                 "score": h["_score"],
@@ -176,7 +180,7 @@ def suggest(query, *, size=10, client=None):
     client = client or get_client()
     body = {
         "size": size,
-        "_source": ["id_plant", "url_slug", "name_rus", "name_rus_full", "lat_name"],
+        "_source": ["id_plant", "url_slug", "rus_name_unique", "name_rus", "name_rus_full", "lat_name"],
         "query": {"match": {"suggest": {"query": query, "operator": "and"}}},
     }
     resp = client.search(index=INDEX, body=body)
@@ -184,8 +188,8 @@ def suggest(query, *, size=10, client=None):
         {
             "id_plant": h["_source"]["id_plant"],
             "url_slug": h["_source"]["url_slug"],
-            "name": (h["_source"]["name_rus"] or h["_source"].get("name_rus_full")
-                     or h["_source"]["lat_name"]),
+            "name": (h["_source"].get("rus_name_unique") or h["_source"]["name_rus"]
+                     or h["_source"].get("name_rus_full") or h["_source"]["lat_name"]),
         }
         for h in resp["hits"]["hits"]
     ]

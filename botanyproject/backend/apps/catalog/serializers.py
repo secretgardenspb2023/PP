@@ -10,9 +10,11 @@ def _names(manager, attr="name"):
 
 
 def display_name(plant):
-    """Russian display name: explicit name_rus, else the canonical Russian binomial
-    (genus + species rus_name) — populated for the ~11% of cards with blank name_rus
-    — else the latin name. Mirrors the fallback used in search results."""
+    """Russian display name. По решению заказчика заголовок берётся из
+    ``rus_name_unique`` (заполнено для всех карточек, включает сорт). Остальное —
+    подстраховка: ``name_rus``, канонический русский биномен (род + вид), латынь."""
+    if plant.rus_name_unique:
+        return plant.rus_name_unique
     if plant.name_rus:
         return plant.name_rus
     species = plant.species

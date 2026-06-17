@@ -103,6 +103,14 @@ def apply_filters(qs, params, *, exclude=None, exclude_range=None):
     if zones:
         qs = qs.filter(usda_zone__in=zones)
 
+    # Алфавитный навигатор (ТЗ 5.17 / дизайн): карточки по первой букве отображаемого
+    # имени (rus_name_unique). Спецзначение "#" — всё, что начинается не с буквы.
+    letter = (params.get("letter") or "").strip()
+    if letter == "#":
+        qs = qs.exclude(rus_name_unique__iregex=r"^[A-Za-zА-Яа-яЁё]")
+    elif letter:
+        qs = qs.filter(rus_name_unique__istartswith=letter[:1])
+
     for param, field in BOOLEANS.items():
         if param in params:
             qs = qs.filter(**{field: _bool(params.get(param))})

@@ -5,6 +5,7 @@ import { Filters } from "@/components/catalog/Filters";
 import { SortSelect } from "@/components/catalog/SortSelect";
 import { Pagination } from "@/components/catalog/Pagination";
 import { CatalogSearch } from "@/components/catalog/CatalogSearch";
+import { AlphabetNav } from "@/components/catalog/AlphabetNav";
 import { Reveal } from "@/components/Reveal";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ const FILTER_KEYS = [
   "flower_color", "leaf_color", "vegetation_period", "flowering_month", "fruiting_month",
   "is_thorny", "is_toxic", "has_aroma",
   "height_min", "height_max", "diameter_min", "diameter_max", "growth_min", "growth_max",
+  "letter",
 ];
 
 type SP = Record<string, string | string[] | undefined>;
@@ -38,6 +40,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const params = pick(sp);
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  const view = Array.isArray(sp.view) ? sp.view[0] : sp.view;
+  const isAlphabet = view === "alphabet";
 
   let list, facets;
   try {
@@ -54,17 +58,25 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     );
   }
 
-  // querystring without `page` for pagination links
-  const qWithoutPage = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([k]) => k !== "page")),
-  ).toString();
+  // querystring without `page` for pagination links (keep alphabet mode)
+  const pageParams = Object.fromEntries(Object.entries(params).filter(([k]) => k !== "page"));
+  if (isAlphabet) pageParams.view = "alphabet";
+  const qWithoutPage = new URLSearchParams(pageParams).toString();
 
   return (
     <div className="container-page py-8">
-      <h1 className="mb-1 text-[26px] font-bold text-ink md:text-[32px]">Каталог растений</h1>
+      <h1 className="mb-1 text-[26px] font-bold text-ink md:text-[32px]">
+        {isAlphabet ? "Алфавитный указатель" : "Каталог растений"}
+      </h1>
       <p className="mb-6 text-[16px] text-muted">
         Найдено: <span className="font-medium text-ink">{list.count.toLocaleString("ru-RU")}</span>
       </p>
+
+      {isAlphabet && (
+        <div className="mb-6">
+          <AlphabetNav active={params.letter ?? ""} />
+        </div>
+      )}
 
       <div className="mb-6">
         <CatalogSearch />

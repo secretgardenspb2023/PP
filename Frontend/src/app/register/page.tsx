@@ -84,7 +84,9 @@ export default function RegisterPage() {
                 className="auth-input"
                 autoComplete="new-password"
               />
-              <span className="mt-1 block text-[13px] text-muted">Минимум 8 символов.</span>
+              <span className="mt-1 block text-[13px] text-muted">
+                Минимум 8 символов, не только цифры и не слишком простой.
+              </span>
             </label>
 
             <button

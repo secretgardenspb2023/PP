@@ -23,8 +23,25 @@ async function post(path: string, body?: unknown, token?: string) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { detail?: string }).detail || `Ошибка (${res.status})`);
+  if (!res.ok) throw new Error(errorMessage(data, res.status));
   return data;
+}
+
+// DRF errors come either as {detail: "..."} or as field errors
+// {password: ["…"], email: ["…"]}. Surface them so the user sees the real reason
+// (e.g. почему пароль не принят), а не безликое «Ошибка (400)».
+function errorMessage(data: unknown, status: number): string {
+  if (data && typeof data === "object") {
+    const d = data as Record<string, unknown>;
+    if (typeof d.detail === "string") return d.detail;
+    const parts: string[] = [];
+    for (const v of Object.values(d)) {
+      if (Array.isArray(v)) parts.push(...v.map((x) => String(x)));
+      else if (typeof v === "string") parts.push(v);
+    }
+    if (parts.length) return parts.join(" ");
+  }
+  return `Ошибка (${status})`;
 }
 
 export async function login(email: string, password: string): Promise<{ access: string }> {

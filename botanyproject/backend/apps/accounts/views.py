@@ -10,8 +10,9 @@ import time
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.shortcuts import redirect
 from django.utils.crypto import constant_time_compare, get_random_string
@@ -103,6 +104,40 @@ class RegisterView(APIView):
     def post(self, request):
         if not captcha.verify_captcha(request.data.get("captcha_token"), _client_ip(request)):
             return Response({"detail": "Проверка капчи не пройдена."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Повторная регистрация существующего email: если он уже подтверждён —
+        # отправляем на вход; если ещё нет — повторно шлём письмо (а не ошибку
+        # «уже существует»), позволяя задать свежий пароль/имя. Подтвердить всё
+        # равно можно только по ссылке из письма, так что чужой адрес не угнать.
+        email = (request.data.get("email") or "").strip()
+        existing = User.objects.filter(email__iexact=email).first() if email else None
+        if existing is not None:
+            if existing.is_active:
+                return Response(
+                    {"detail": "Этот email уже зарегистрирован. Войдите или восстановите пароль."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            password = request.data.get("password") or ""
+            try:
+                validate_password(password, existing)
+            except ValidationError as exc:
+                return Response({"password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+            name = request.data.get("full_name")
+            if name is not None:
+                existing.full_name = name
+            existing.set_password(password)
+            existing.save()
+            _send_token_email(
+                existing, "Подтверждение регистрации PoiskPlant",
+                "Подтвердите ваш email по ссылке:", "/verify-email",
+            )
+            audit.log_event("register_resend", request=request, user=existing)
+            return Response(
+                {"detail": "Вы уже регистрировались, но не подтвердили email. "
+                           "Мы отправили письмо повторно."},
+                status=status.HTTP_200_OK,
+            )
+
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()

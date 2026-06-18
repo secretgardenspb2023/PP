@@ -28,7 +28,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from . import audit, captcha, oauth
+from . import audit, captcha, email_codes, oauth
 from .models import PROVIDER_GOOGLE, PROVIDER_TELEGRAM, PROVIDER_VK
 from .serializers import (
     EmailVerifySerializer,
@@ -38,6 +38,7 @@ from .serializers import (
     PasswordResetSerializer,
     ProfileUpdateSerializer,
     RegisterSerializer,
+    ResendCodeSerializer,
     UserSerializer,
 )
 
@@ -106,9 +107,9 @@ class RegisterView(APIView):
             return Response({"detail": "Проверка капчи не пройдена."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Повторная регистрация существующего email: если он уже подтверждён —
-        # отправляем на вход; если ещё нет — повторно шлём письмо (а не ошибку
+        # отправляем на вход; если ещё нет — повторно шлём код (а не ошибку
         # «уже существует»), позволяя задать свежий пароль/имя. Подтвердить всё
-        # равно можно только по ссылке из письма, так что чужой адрес не угнать.
+        # равно можно только кодом из письма, так что чужой адрес не угнать.
         email = (request.data.get("email") or "").strip()
         existing = User.objects.filter(email__iexact=email).first() if email else None
         if existing is not None:
@@ -127,14 +128,11 @@ class RegisterView(APIView):
                 existing.full_name = name
             existing.set_password(password)
             existing.save()
-            _send_token_email(
-                existing, "Подтверждение регистрации PoiskPlant",
-                "Подтвердите ваш email по ссылке:", "/verify-email",
-            )
+            email_codes.issue_code(existing)
             audit.log_event("register_resend", request=request, user=existing)
             return Response(
                 {"detail": "Вы уже регистрировались, но не подтвердили email. "
-                           "Мы отправили письмо повторно."},
+                           "Мы отправили новый код на почту."},
                 status=status.HTTP_200_OK,
             )
 
@@ -142,32 +140,55 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         audit.log_event("register", request=request, user=user)
-        _send_token_email(
-            user, "Подтверждение регистрации PoiskPlant",
-            "Подтвердите ваш email по ссылке:", "/verify-email",
-        )
+        email_codes.issue_code(user)
         return Response(
-            {"detail": "Регистрация успешна. Подтвердите email по ссылке из письма."},
+            {"detail": "Регистрация успешна. Мы отправили код подтверждения на почту."},
             status=status.HTTP_201_CREATED,
         )
 
 
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = EmailVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = _decode_uid(serializer.validated_data["uid"])
-        if user is None or not default_token_generator.check_token(
-            user, serializer.validated_data["token"]
-        ):
-            return Response({"detail": "Недействительная ссылка."}, status=status.HTTP_400_BAD_REQUEST)
+        email = serializer.validated_data["email"]
+        result = email_codes.check_code(email, serializer.validated_data["code"])
+        if result != "ok":
+            msg = {
+                "expired": "Код устарел или не найден. Запросите новый.",
+                "too_many": "Слишком много попыток. Запросите новый код.",
+                "invalid": "Неверный код. Проверьте и попробуйте ещё раз.",
+            }[result]
+            return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            return Response({"detail": "Пользователь не найден."}, status=status.HTTP_400_BAD_REQUEST)
         if not user.is_active:
             user.is_active = True
             user.save(update_fields=["is_active"])
         audit.log_event("email_verified", request=request, user=user)
-        return Response({"detail": "Email подтверждён."})
+        return Response({"detail": "Email подтверждён. Аккаунт активирован."})
+
+
+class ResendCodeView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = ResendCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email, is_active=False).first()
+        if user is not None:
+            email_codes.issue_code(user)
+            audit.log_event("verify_code_resend", request=request, user=user)
+        # Не раскрываем, существует ли адрес и ждёт ли он подтверждения.
+        return Response({"detail": "Если адрес ожидает подтверждения, мы отправили новый код."})
 
 
 class LoginView(APIView):
@@ -514,7 +535,7 @@ class TelegramLoginView(APIView):
 
 
 class VKLoginView(APIView):
-    """Redirect the browser to the VK ID consent screen (OAuth 2.1 + PKCE)."""
+    """Redirect the browser to the VK consent screen."""
 
     permission_classes = [AllowAny]
 
@@ -522,10 +543,8 @@ class VKLoginView(APIView):
         if not settings.VK_APP_ID:
             return Response({"detail": "VK-вход не настроен."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         state = get_random_string(32)
-        verifier, challenge = oauth.vk_pkce_pair()
         request.session["vk_oauth_state"] = state
-        request.session["vk_oauth_verifier"] = verifier
-        return redirect(oauth.vk_auth_url(state, challenge))
+        return redirect(oauth.vk_auth_url(state))
 
 
 class VKCallbackView(APIView):
@@ -539,14 +558,11 @@ class VKCallbackView(APIView):
             return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
         code = request.query_params.get("code", "")
         state = request.query_params.get("state", "")
-        # VK ID returns device_id on the callback; it is required for the token exchange.
-        device_id = request.query_params.get("device_id", "")
         saved = request.session.pop("vk_oauth_state", None)
-        verifier = request.session.pop("vk_oauth_verifier", None)
-        if not code or not saved or not verifier or not constant_time_compare(state, saved):
+        if not code or not saved or not constant_time_compare(state, saved):
             return Response({"detail": "Некорректный OAuth-ответ."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            profile = oauth.vk_exchange(code, verifier, device_id)
+            profile = oauth.vk_exchange(code)
         except Exception:  # noqa: BLE001 — upstream/network failure
             return Response({"detail": "Не удалось получить профиль VK."}, status=status.HTTP_502_BAD_GATEWAY)
         user = oauth.get_or_create_social(

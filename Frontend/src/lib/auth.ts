@@ -60,8 +60,12 @@ export async function logout(): Promise<void> {
   await post("/logout/").catch(() => {});
 }
 
-export async function verifyEmail(token: string) {
-  return post("/verify-email/", { token });
+export async function verifyEmail(email: string, code: string) {
+  return post("/verify-email/", { email, code });
+}
+
+export async function resendCode(email: string) {
+  return post("/verify-email/resend/", { email });
 }
 
 export async function me(token: string): Promise<User> {

@@ -37,8 +37,12 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 class EmailVerifySerializer(serializers.Serializer):
-    uid = serializers.CharField()
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=12)
+
+
+class ResendCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class OTPSerializer(serializers.Serializer):

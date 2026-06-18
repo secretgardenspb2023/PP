@@ -3,9 +3,11 @@
 No third-party deps — plain urllib + hmac. Account merging follows ТЗ 3.6:
 join by a *verified* provider email; Telegram (no email) keys by social id.
 """
+import base64
 import hashlib
 import hmac
 import json
+import os
 import urllib.parse
 import urllib.request
 
@@ -18,10 +20,12 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
-VK_AUTH_URL = "https://oauth.vk.com/authorize"
-VK_TOKEN_URL = "https://oauth.vk.com/access_token"
-VK_USERS_URL = "https://api.vk.com/method/users.get"
-VK_API_VERSION = "5.131"
+# VK ID (OAuth 2.1 + PKCE). The legacy oauth.vk.com flow was retired by VK and
+# now answers any authorize request with `{"error":"invalid_request",
+# "error_description":"Security Error"}`, so the whole VK login goes through id.vk.com.
+VK_AUTH_URL = "https://id.vk.com/authorize"
+VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
+VK_USERINFO_URL = "https://id.vk.com/oauth2/user_info"
 
 
 def google_auth_url(state):
@@ -74,55 +78,68 @@ def google_exchange(code):
     }
 
 
-def _get_url(url):
-    with urllib.request.urlopen(url, timeout=10) as resp:
-        return json.loads(resp.read())
+def _b64url(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
-def vk_auth_url(state):
+def vk_pkce_pair():
+    """Return (code_verifier, code_challenge) for VK ID PKCE (method S256).
+
+    The verifier (~86 url-safe chars, within the RFC 7636 43–128 range) is kept
+    in the session; only the SHA-256 challenge travels to VK on the authorize step.
+    """
+    verifier = _b64url(os.urandom(64))
+    challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
+    return verifier, challenge
+
+
+def vk_auth_url(state, code_challenge):
     params = {
         "client_id": settings.VK_APP_ID,
         "redirect_uri": settings.VK_REDIRECT_URI,
         "response_type": "code",
         "scope": "email",
         "state": state,
-        "v": VK_API_VERSION,
-        "display": "page",
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     return f"{VK_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
 
-def vk_exchange(code):
-    """Exchange a VK authorization code for the profile (id, email, name).
+def vk_exchange(code, code_verifier, device_id):
+    """Exchange a VK ID authorization code (OAuth 2.1 + PKCE) for the profile.
 
-    VK returns the email in the token response only when the user granted the
-    `email` scope and has one — otherwise we key by VK id (см. get_or_create_social).
+    PKCE replaces the client secret: the token call is authenticated by the
+    code_verifier + device_id (both bound to the authorize step). Email comes
+    back from user_info only when the `email` scope was granted and the account
+    has one — otherwise we key by VK id (см. get_or_create_social).
     """
-    token = _get_url(
-        f"{VK_TOKEN_URL}?"
-        + urllib.parse.urlencode(
-            {
-                "client_id": settings.VK_APP_ID,
-                "client_secret": settings.VK_SECURE_KEY,
-                "redirect_uri": settings.VK_REDIRECT_URI,
-                "code": code,
-            }
-        )
+    token = _post_form(
+        VK_TOKEN_URL,
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "code_verifier": code_verifier,
+            "client_id": settings.VK_APP_ID,
+            "device_id": device_id,
+            "redirect_uri": settings.VK_REDIRECT_URI,
+        },
     )
-    uid = token["user_id"]
-    name = ""
+    access_token = token["access_token"]
+    uid = token.get("user_id")
+    email, name = None, ""
     try:
-        info = _get_url(
-            f"{VK_USERS_URL}?"
-            + urllib.parse.urlencode(
-                {"user_ids": uid, "access_token": token["access_token"], "v": VK_API_VERSION}
-            )
+        info = _post_form(
+            VK_USERINFO_URL,
+            {"client_id": settings.VK_APP_ID, "access_token": access_token},
         )
-        u = info["response"][0]
+        u = info["user"]
+        uid = u.get("user_id", uid)
+        email = u.get("email")
         name = " ".join(filter(None, [u.get("first_name"), u.get("last_name")]))
-    except Exception:  # noqa: BLE001 — name is optional
+    except Exception:  # noqa: BLE001 — email/name are optional
         pass
-    return {"id": str(uid), "email": token.get("email"), "name": name}
+    return {"id": str(uid), "email": email, "name": name}
 
 
 def verify_telegram(data, bot_token):

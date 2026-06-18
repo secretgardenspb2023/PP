@@ -543,8 +543,10 @@ class VKLoginView(APIView):
         if not settings.VK_APP_ID:
             return Response({"detail": "VK-вход не настроен."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         state = get_random_string(32)
+        verifier, challenge = oauth.vk_pkce_pair()
         request.session["vk_oauth_state"] = state
-        return redirect(oauth.vk_auth_url(state))
+        request.session["vk_pkce_verifier"] = verifier
+        return redirect(oauth.vk_auth_url(state, challenge))
 
 
 class VKCallbackView(APIView):
@@ -558,11 +560,16 @@ class VKCallbackView(APIView):
             return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
         code = request.query_params.get("code", "")
         state = request.query_params.get("state", "")
+        device_id = request.query_params.get("device_id", "")
         saved = request.session.pop("vk_oauth_state", None)
-        if not code or not saved or not constant_time_compare(state, saved):
+        verifier = request.session.pop("vk_pkce_verifier", None)
+        if (
+            not code or not saved or not constant_time_compare(state, saved)
+            or not verifier or not device_id
+        ):
             return Response({"detail": "Некорректный OAuth-ответ."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            profile = oauth.vk_exchange(code)
+            profile = oauth.vk_exchange(code, verifier, device_id)
         except Exception:  # noqa: BLE001 — upstream/network failure
             return Response({"detail": "Не удалось получить профиль VK."}, status=status.HTTP_502_BAD_GATEWAY)
         user = oauth.get_or_create_social(

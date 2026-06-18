@@ -50,6 +50,16 @@ server {
     }
     # API, admin and DRF schema stay on Django.
     location /api/ {
+        # The staging Basic Auth and the app's Bearer (JWT) auth both use the
+        # Authorization header, which can hold only one scheme — so a logged-in
+        # SPA call (Authorization: Bearer …) can't also carry Basic creds and
+        # nginx would 401-loop the browser's password prompt. Skip Basic Auth
+        # for Bearer requests (Django validates the JWT); everything else still
+        # needs the staging password.
+        set $staging_auth "PoiskPlant staging";
+        if ($http_authorization ~ "^Bearer ") { set $staging_auth off; }
+        auth_basic $staging_auth;
+        auth_basic_user_file /etc/nginx/.htpasswd;
         proxy_pass http://backend;
         include /etc/nginx/snippets/proxy.conf;
     }

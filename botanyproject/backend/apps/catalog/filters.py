@@ -7,6 +7,8 @@ behaviour, so picking one value does not zero out its siblings.
 """
 from django.db.models import Count, Max, Min, Q
 
+from . import search as es
+
 # Number of bars in a range-filter distribution histogram (ТЗ 5.14).
 HISTOGRAM_BUCKETS = 8
 
@@ -74,13 +76,40 @@ def _bool(value):
     return str(value).lower() in ("1", "true", "yes", "on")
 
 
+def _fulltext_ids(query):
+    """id_plant matches from Elasticsearch, or None when ES is unavailable.
+
+    None signals the caller to degrade to the PostgreSQL fallback (ТЗ 5.11)."""
+    try:
+        if es.is_available():
+            return es.search_ids(query)
+    except Exception:  # noqa: BLE001 — any ES error degrades to PostgreSQL
+        pass
+    return None
+
+
+def _ilike_condition(query):
+    # PostgreSQL fallback used only when ES is down. Fold «ё»→«е» so a "клён"
+    # query still matches data stored without «ё» ("Клен") — the literal ILIKE
+    # match the previous implementation lacked. No morphology/synonyms here; the
+    # ES path (above) is the real search.
+    folded = query.replace("ё", "е").replace("Ё", "Е")
+    cond = Q()
+    for field in SEARCH_FIELDS:
+        cond |= Q(**{f"{field}__icontains": folded})
+    return cond
+
+
 def apply_filters(qs, params, *, exclude=None, exclude_range=None):
-    q = params.get("q")
+    q = (params.get("q") or "").strip()
     if q:
-        search = Q()
-        for field in SEARCH_FIELDS:
-            search |= Q(**{f"{field}__icontains": q})
-        qs = qs.filter(search)
+        ids = _fulltext_ids(q)
+        if ids is None:
+            qs = qs.filter(_ilike_condition(q))
+        elif ids:
+            qs = qs.filter(id_plant__in=ids)
+        else:
+            qs = qs.none()
 
     for dim, path in DIMENSIONS.items():
         if dim == exclude:

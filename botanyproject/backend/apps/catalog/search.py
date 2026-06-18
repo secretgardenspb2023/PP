@@ -176,6 +176,34 @@ def search(query, *, size=24, offset=0, client=None):
     }
 
 
+def search_ids(query, *, limit=10000, client=None):
+    """Return id_plant values matching ``query``, ordered by relevance.
+
+    Used by the catalog list/facets so full-text search (morphology, typos,
+    «ё/е», synonyms, descriptions) runs through Elasticsearch while filtering,
+    faceting, sorting and pagination stay in PostgreSQL. ``limit`` is capped at
+    the index ``max_result_window`` (10k); the catalog holds ~12k cards and a
+    text query realistically matches far fewer.
+    """
+    client = client or get_client()
+    body = {
+        "from": 0,
+        "size": limit,
+        "_source": False,
+        "query": {
+            "multi_match": {
+                "query": query,
+                "fields": SEARCH_FIELDS,
+                "type": "best_fields",
+                "fuzziness": "AUTO",
+                "operator": "and",
+            }
+        },
+    }
+    resp = client.search(index=INDEX, body=body)
+    return [int(h["_id"]) for h in resp["hits"]["hits"]]
+
+
 def suggest(query, *, size=10, client=None):
     client = client or get_client()
     body = {

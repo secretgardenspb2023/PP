@@ -9,6 +9,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  applySession: (access: string, user: auth.User) => void;
 };
 
 const Ctx = createContext<AuthState | null>(null);
@@ -51,8 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) setUser(await auth.me(token));
   }, [token]);
 
+  // Завести сессию из уже полученных токена и профиля (напр. после подтверждения
+  // email — refresh-cookie уже выставлен бэкендом, повторный вход не нужен).
+  const applySession = useCallback((access: string, u: auth.User) => {
+    setToken(access);
+    setUser(u);
+    setLoading(false);
+  }, []);
+
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signOut, refreshUser }}>
+    <Ctx.Provider value={{ user, loading, signIn, signOut, refreshUser, applySession }}>
       {children}
     </Ctx.Provider>
   );

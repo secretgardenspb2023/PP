@@ -171,7 +171,15 @@ class VerifyEmailView(APIView):
             user.is_active = True
             user.save(update_fields=["is_active"])
         audit.log_event("email_verified", request=request, user=user)
-        return Response({"detail": "Email подтверждён. Аккаунт активирован."})
+        # Сразу логиним пользователя после подтверждения: ставим refresh-cookie и
+        # отдаём access + профиль, чтобы не заставлять входить повторно.
+        return _tokens_response(
+            user,
+            body_extra={
+                "user": UserSerializer(user).data,
+                "detail": "Email подтверждён. Аккаунт активирован.",
+            },
+        )
 
 
 class ResendCodeView(APIView):

@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { resendCode, verifyEmail } from "@/lib/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 function VerifyInner() {
   const emailFromLink = useSearchParams().get("email") ?? "";
+  const router = useRouter();
+  const { applySession } = useAuth();
   const [email, setEmail] = useState(emailFromLink);
   const [code, setCode] = useState("");
   const [state, setState] = useState<"idle" | "busy" | "ok" | "err">("idle");
@@ -18,8 +20,12 @@ function VerifyInner() {
     setState("busy");
     setMsg("");
     try {
-      await verifyEmail(email, code.trim());
+      const { access, user } = await verifyEmail(email, code.trim());
+      // Email подтверждён — бэкенд уже выставил refresh-cookie и вернул токен.
+      // Заводим сессию и сразу ведём в личный кабинет, без повторного входа.
+      applySession(access, user);
       setState("ok");
+      router.replace("/profile");
     } catch (err) {
       setState("err");
       setMsg(err instanceof Error ? err.message : "Не удалось подтвердить email.");
@@ -43,13 +49,7 @@ function VerifyInner() {
         <div className="mx-auto mb-3 grid size-12 place-items-center rounded-full bg-brand/15 text-2xl text-brand">
           ✓
         </div>
-        <p className="text-[16px] text-ink">Email подтверждён. Аккаунт активирован.</p>
-        <Link
-          href="/login"
-          className="mt-5 inline-block rounded-control bg-brand px-5 py-2.5 font-medium text-white hover:bg-brand-light hover:text-brand-dark"
-        >
-          Войти
-        </Link>
+        <p className="text-[16px] text-ink">Email подтверждён. Входим в аккаунт…</p>
       </div>
     );
   }

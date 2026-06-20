@@ -65,10 +65,14 @@ INDEX_BODY = {
     },
 }
 
+# Поиск идёт по названиям/синонимам/таксономии — НЕ по тексту описания.
+# Матч по описанию + fuzzy давал ложные совпадения («алое» → красные клёны
+# из-за «алый» в описании, «ель» → пихты). Описание остаётся в индексе (для
+# подсветки), но в подбор результатов не входит.
 SEARCH_FIELDS = [
     "rus_name_unique^5", "name_rus^5", "name_rus_full^5", "synonyms^4", "lat_name^3",
     "genus^2", "genus_rus^2", "species_rus^2", "family^2",
-    "species", "description",
+    "species",
 ]
 
 
@@ -146,7 +150,7 @@ def search(query, *, size=24, offset=0, client=None):
                 "query": query,
                 "fields": SEARCH_FIELDS,
                 "type": "best_fields",
-                "fuzziness": "AUTO",
+                "fuzziness": "AUTO:5,8",
                 "operator": "and",
             }
         },
@@ -195,7 +199,7 @@ def search_ids(query, *, limit=10000, client=None):
                 "query": query,
                 "fields": SEARCH_FIELDS,
                 "type": "best_fields",
-                "fuzziness": "AUTO",
+                "fuzziness": "AUTO:5,8",
                 "operator": "and",
             }
         },

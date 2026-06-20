@@ -127,7 +127,9 @@ def vk_exchange(code, code_verifier, device_id):
     )
     access_token = token["access_token"]
     uid = token.get("user_id")
-    email, name = None, ""
+    # VK ID отдаёт email (и phone) обычно прямо в ответе на обмен токена, когда
+    # пользователь выдал scope email; user_info — запасной источник.
+    email, name = token.get("email"), ""
     try:
         info = _post_form(
             VK_USERINFO_URL,
@@ -135,7 +137,7 @@ def vk_exchange(code, code_verifier, device_id):
         )
         u = info["user"]
         uid = u.get("user_id", uid)
-        email = u.get("email")
+        email = email or u.get("email")
         name = " ".join(filter(None, [u.get("first_name"), u.get("last_name")]))
     except Exception:  # noqa: BLE001 — email/name are optional
         pass

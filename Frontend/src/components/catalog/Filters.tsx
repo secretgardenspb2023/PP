@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
-import type { Facets } from "@/lib/api";
+import type { Facets, Histograms } from "@/lib/api";
+import { RangeFilters } from "@/components/catalog/RangeFilters";
 
 // Dimension -> Russian title. Order here drives display order.
 const LABELS: Record<string, string> = {
@@ -28,7 +29,7 @@ function parseList(v: string | null): string[] {
   return v ? v.split(",").filter(Boolean) : [];
 }
 
-export function Filters({ facets }: { facets: Facets }) {
+export function Filters({ facets, histograms }: { facets: Facets; histograms?: Histograms }) {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -105,6 +106,8 @@ export function Filters({ facets }: { facets: Facets }) {
           );
         })}
       </div>
+
+      {histograms && <RangeFilters histograms={histograms} />}
     </aside>
   );
 }

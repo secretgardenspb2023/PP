@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { TelegramLogin } from "@/components/auth/TelegramLogin";
 import { googleLoginUrl, vkLoginUrl } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -85,6 +86,8 @@ export default function LoginPage() {
               ВКонтакте
             </a>
           </div>
+
+          <TelegramLogin />
         </form>
 
         <p className="mt-4 text-center text-[15px] text-muted">

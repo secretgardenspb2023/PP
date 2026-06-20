@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listPlants, getFacets } from "@/lib/api";
+import { listPlants, getFacets, getHistograms } from "@/lib/api";
 import { PlantCard } from "@/components/PlantCard";
 import { Filters } from "@/components/catalog/Filters";
 import { SortSelect } from "@/components/catalog/SortSelect";
@@ -43,12 +43,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const view = Array.isArray(sp.view) ? sp.view[0] : sp.view;
   const isAlphabet = view === "alphabet";
 
-  let list, facets;
+  let list, facets, histograms;
   try {
-    [list, facets] = await Promise.all([
+    [list, facets, histograms] = await Promise.all([
       listPlants(params, { cache: "no-store" }),
       // facets endpoint ignores page/sort; pass the filter params as-is
       getFacets(params, { cache: "no-store" }),
+      getHistograms(params, { cache: "no-store" }),
     ]);
   } catch {
     return (
@@ -83,7 +84,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="flex flex-col gap-8 lg:flex-row">
-        <Filters facets={facets} />
+        <Filters facets={facets} histograms={histograms} />
 
         <section className="min-w-0 flex-1">
           <div className="mb-4 flex items-center justify-between">

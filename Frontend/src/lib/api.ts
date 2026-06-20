@@ -73,6 +73,8 @@ export type PlantDetail = {
     annual_growth_cm?: number | null;
   };
   descriptions: {
+    text?: string | null;
+    facts?: string | null;
     requirements?: string | null;
     problems?: string | null;
     diseases_pests?: string | null;
@@ -141,4 +143,24 @@ export function search(
   init?: RequestInit,
 ): Promise<SearchResponse> {
   return getJSON(`/search/${qs({ q, page })}`, init);
+}
+
+export type Suggestion = { id_plant: number; url_slug: string; name: string };
+
+export function suggest(q: string, init?: RequestInit): Promise<Suggestion[]> {
+  return getJSON(`/search/suggest/${qs({ q })}`, init);
+}
+
+export type Histogram = {
+  min: number | null;
+  max: number | null;
+  buckets: { from: number; to: number; count: number }[];
+};
+export type Histograms = Record<string, Histogram>;
+
+export function getHistograms(
+  params: Record<string, string | number | undefined> = {},
+  init?: RequestInit,
+): Promise<Histograms> {
+  return getJSON(`/plants/histograms/${qs(params)}`, init);
 }

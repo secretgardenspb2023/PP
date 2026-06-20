@@ -186,6 +186,26 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
             )}
           </Reveal>
 
+          {(plant.descriptions.text || plant.descriptions.facts) && (
+            <Reveal>
+              <section className="rounded-card border border-line bg-white p-6 shadow-soft">
+                {plant.descriptions.text && (
+                  <p className="whitespace-pre-line text-[16px] leading-relaxed text-accent-ink">
+                    {plant.descriptions.text}
+                  </p>
+                )}
+                {plant.descriptions.facts && (
+                  <div className="mt-5">
+                    <h3 className="mb-1.5 text-[18px] font-semibold text-ink">Интересные факты</h3>
+                    <p className="whitespace-pre-line text-[16px] leading-relaxed text-accent-ink">
+                      {plant.descriptions.facts}
+                    </p>
+                  </div>
+                )}
+              </section>
+            </Reveal>
+          )}
+
           {groups.map((g, gi) => (
             <Reveal key={g.title} delay={gi * 60}>
               <section className="rounded-card border border-line bg-white p-6 shadow-soft">

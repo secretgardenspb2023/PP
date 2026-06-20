@@ -1,7 +1,17 @@
 """DRF serializers for the catalog read-API (ТЗ Этап 5)."""
+from django.utils.html import strip_tags
 from rest_framework import serializers
 
 from . import models as m
+
+
+def _clean_text(value):
+    """Plain text for display: strip any HTML (~8% of descriptions contain tags),
+    trim. Returns None for empty so the frontend can skip the block."""
+    if not value:
+        return None
+    text = strip_tags(value).strip()
+    return text or None
 
 
 def _names(manager, attr="name"):
@@ -155,12 +165,13 @@ class PlantDetailSerializer(serializers.ModelSerializer):
         return data
 
     def get_descriptions(self, obj):
-        # Per the card matrix (docs/plant-card-matrix.md): content_text and
-        # interesting_facts are intentionally excluded.
         d = getattr(obj, "description", None)
         if not d:
             return {}
         return {
+            # Основной текст описания + интересные факты (по запросу заказчика).
+            "text": _clean_text(d.content_text),
+            "facts": _clean_text(d.interesting_facts),
             "requirements": d.requirements,
             "problems": d.problems,
             "diseases_pests": d.diseases_pests,

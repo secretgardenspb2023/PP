@@ -84,5 +84,13 @@ export async function me(token: string): Promise<User> {
   return res.json();
 }
 
+// Telegram Login Widget posts its signed payload here; backend checks the HMAC
+// and returns tokens like a normal login.
+export async function telegramLogin(
+  data: Record<string, string>,
+): Promise<{ access: string; user: User }> {
+  return post("/telegram/", data) as Promise<{ access: string; user: User }>;
+}
+
 export const googleLoginUrl = `${API}/auth/google/`;
 export const vkLoginUrl = `${API}/auth/vk/`;

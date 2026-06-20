@@ -542,6 +542,32 @@ class TelegramLoginView(APIView):
         return _tokens_response(user, body_extra={"user": UserSerializer(user).data})
 
 
+class TelegramCallbackView(APIView):
+    """Telegram Login Widget in redirect mode (data-auth-url): Telegram отправляет
+    подписанные поля GET-запросом сюда. Надёжнее JS-колбэка в SPA. Проверяем HMAC,
+    ставим refresh-cookie и возвращаем на фронт — как Google/VK."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        data = {k: str(v) for k, v in request.query_params.items()}
+        if not settings.TELEGRAM_BOT_TOKEN or "hash" not in data:
+            return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
+        if not oauth.verify_telegram(data, settings.TELEGRAM_BOT_TOKEN):
+            return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
+        try:
+            if time.time() - int(data.get("auth_date", "0")) > 86400:
+                return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
+        except ValueError:
+            return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
+        name = " ".join(filter(None, [data.get("first_name"), data.get("last_name")]))
+        user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name)
+        audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_TELEGRAM)
+        response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
+        _set_refresh_cookie(response, RefreshToken.for_user(user))
+        return response
+
+
 class VKLoginView(APIView):
     """Redirect the browser to the VK consent screen."""
 

@@ -27,6 +27,7 @@ urlpatterns = [
     path("google/", views.GoogleLoginView.as_view(), name="google"),
     path("google/callback/", views.GoogleCallbackView.as_view(), name="google-callback"),
     path("telegram/", views.TelegramLoginView.as_view(), name="telegram"),
+    path("telegram/callback/", views.TelegramCallbackView.as_view(), name="telegram-callback"),
     path("vk/", views.VKLoginView.as_view(), name="vk"),
     path("vk/callback/", views.VKCallbackView.as_view(), name="vk-callback"),
 ]

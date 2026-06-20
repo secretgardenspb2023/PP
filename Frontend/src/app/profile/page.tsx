@@ -18,6 +18,16 @@ export default function ProfilePage() {
     );
   }
 
+  // Соц-аккаунты без реального email получают «технический» адрес
+  // VK-…@social.poiskplant.ru — его не показываем, вместо него «Вход через …».
+  const PROVIDER_LABEL: Record<string, string> = {
+    VK: "ВКонтакте",
+    TG: "Telegram",
+    "Гугл": "Google",
+  };
+  const isSocialEmail = String(user.email).endsWith("@social.poiskplant.ru");
+  const loginVia = PROVIDER_LABEL[String(user.social_provider ?? "")] ?? "соцсеть";
+
   return (
     <div className="container-page py-12">
       <div className="mx-auto max-w-2xl">
@@ -31,14 +41,16 @@ export default function ProfilePage() {
             <p className="truncate text-[20px] font-semibold text-ink">
               {user.full_name || "Пользователь"}
             </p>
-            <p className="truncate text-[15px] text-muted">{user.email}</p>
+            <p className="truncate text-[15px] text-muted">
+              {isSocialEmail ? `Вход через ${loginVia}` : user.email}
+            </p>
           </div>
         </div>
 
         <dl className="mt-4 rounded-card border border-line bg-white p-6 text-[15px]">
           <div className="flex justify-between border-b border-line py-2">
-            <dt className="text-muted">Email</dt>
-            <dd className="font-medium text-ink">{user.email}</dd>
+            <dt className="text-muted">{isSocialEmail ? "Вход через" : "Email"}</dt>
+            <dd className="font-medium text-ink">{isSocialEmail ? loginVia : user.email}</dd>
           </div>
           <div className="flex justify-between py-2">
             <dt className="text-muted">Статус</dt>

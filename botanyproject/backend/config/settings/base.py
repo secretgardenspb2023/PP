@@ -112,9 +112,11 @@ ELASTICSEARCH_URL = env("ELASTICSEARCH_URL", default="http://elasticsearch:9200"
 
 # ---- DRF + OpenAPI ----
 REST_FRAMEWORK = {
+    # JWT-only. SessionAuthentication убран намеренно: при открытой сессии Django-
+    # админки он включал CSRF-проверку на cookie-эндпоинтах (token/refresh, login,
+    # соц-вход) → 403 «CSRF Failed» и не завершался вход. API авторизуется Bearer-JWT.
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",

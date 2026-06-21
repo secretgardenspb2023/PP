@@ -16,6 +16,12 @@ INDEX = "plants"
 INDEX_BODY = {
     "settings": {
         "analysis": {
+            # Сворачиваем ё/э → е (и в индексе, и в запросе): данные часто пишут
+            # «Алое» вместо «Алоэ», «клен» вместо «клён» — так запрос «алоэ»/«клён»
+            # находит карточку независимо от е/ё/э.
+            "char_filter": {
+                "ru_eyo": {"type": "mapping", "mappings": ["ё=>е", "Ё=>е", "э=>е", "Э=>е"]},
+            },
             "filter": {
                 "ru_stop": {"type": "stop", "stopwords": "_russian_"},
                 "ru_stemmer": {"type": "stemmer", "language": "russian"},
@@ -23,14 +29,17 @@ INDEX_BODY = {
             },
             "analyzer": {
                 "ru": {
+                    "char_filter": ["ru_eyo"],
                     "tokenizer": "standard",
                     "filter": ["lowercase", "ru_stop", "ru_stemmer"],
                 },
                 "ru_suggest_index": {
+                    "char_filter": ["ru_eyo"],
                     "tokenizer": "standard",
                     "filter": ["lowercase", "edge_ngram"],
                 },
                 "ru_suggest_search": {
+                    "char_filter": ["ru_eyo"],
                     "tokenizer": "standard",
                     "filter": ["lowercase"],
                 },

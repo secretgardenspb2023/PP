@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HeaderAuth } from "@/components/HeaderAuth";
+import { HeaderSearch } from "@/components/HeaderSearch";
 
 const NAV = [
   { label: "Каталог", href: "/catalog" },
@@ -18,16 +19,7 @@ export function Header() {
           </span>
         </Link>
 
-        <form action="/catalog" className="relative hidden flex-1 md:block">
-          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            name="q"
-            placeholder="Поиск растения по названию…"
-            aria-label="Поиск растения"
-            className="h-11 w-full rounded-control border border-line bg-surface pl-11 pr-4 text-[15px] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-muted focus:border-brand focus:bg-white focus:shadow-[0_0_0_4px_rgba(86,183,107,0.13)]"
-          />
-        </form>
+        <HeaderSearch />
 
         <button
           type="button"
@@ -62,15 +54,6 @@ function LeafMark() {
         <path d="M5 19C5 11 11 5 20 5c0 9-6 15-14 15-1.2 0-1.8-.5-1.8-1.5C4.2 16 7 13 11 11.5 8 14 6.5 16 6 19H5Z" />
       </svg>
     </span>
-  );
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.2-3.2" strokeLinecap="round" />
-    </svg>
   );
 }
 

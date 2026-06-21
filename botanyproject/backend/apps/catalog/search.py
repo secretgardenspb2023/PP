@@ -85,6 +85,22 @@ SEARCH_FIELDS = [
 ]
 
 
+# Таблица опечаток — ОТДЕЛЬНО от ботанических синонимов (по просьбе заказчика).
+# Частые ошибки/варианты написания → каноническое слово. Применяется к тексту
+# запроса ДО поиска. Пополняется свободно; реиндекс НЕ нужен. Ключи в нижнем регистре.
+TYPO_FIXES = {
+    "спатифилум": "спатифиллум",
+    "стапифилум": "спатифиллум",
+    "спатифиллюм": "спатифиллум",
+    "спацифилум": "спатифиллум",
+}
+
+
+def fix_typos(query):
+    """Заменить известные опечатки в словах запроса на канонические написания."""
+    return " ".join(TYPO_FIXES.get(w.lower(), w) for w in (query or "").split())
+
+
 def get_client():
     return Elasticsearch(dj_settings.ELASTICSEARCH_URL, request_timeout=10)
 
@@ -101,7 +117,14 @@ def build_document(plant):
     genus = species.genus
     family = genus.family
     description = getattr(plant, "description", None)
-    synonyms = [s.full_name or s.synonym_name for s in plant.synonyms.all()]
+    # Синонимы всех уровней (род + вид + растение) — как в карточке. Большинство
+    # синонимов в базе на уровне рода/вида; раньше индексировались только plant-level,
+    # из-за чего поиск по синониму почти не работал.
+    synonyms = [
+        s.full_name or s.synonym_name
+        for s in (*genus.synonyms.all(), *species.synonyms.all(), *plant.synonyms.all())
+        if (s.full_name or s.synonym_name)
+    ]
     name_rus = plant.name_rus or ""
     rus_name_unique = plant.rus_name_unique or ""
     lat_name = plant.lat_name_unique or ""
@@ -151,6 +174,7 @@ def reindex(queryset, *, client=None, chunk_size=1000):
 
 def search(query, *, size=24, offset=0, client=None):
     client = client or get_client()
+    query = fix_typos(query)
     body = {
         "from": offset,
         "size": size,
@@ -199,6 +223,7 @@ def search_ids(query, *, limit=10000, client=None):
     text query realistically matches far fewer.
     """
     client = client or get_client()
+    query = fix_typos(query)
     body = {
         "from": 0,
         "size": limit,
@@ -219,6 +244,7 @@ def search_ids(query, *, limit=10000, client=None):
 
 def suggest(query, *, size=10, client=None):
     client = client or get_client()
+    query = fix_typos(query)
     body = {
         "size": size,
         "_source": ["id_plant", "url_slug", "rus_name_unique", "name_rus", "name_rus_full", "lat_name"],

@@ -11,7 +11,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         queryset = (
             Plant.objects.select_related("species__genus__family", "description")
-            .prefetch_related("synonyms")
+            .prefetch_related("synonyms", "species__synonyms", "species__genus__synonyms")
         )
         self.stdout.write("reindexing…")
         count = search.reindex(queryset)

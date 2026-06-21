@@ -74,7 +74,7 @@ export function HeaderSearch() {
                   e.preventDefault();
                   setOpen(false);
                   setValue("");
-                  router.push(`/plant/${s.id_plant}`);
+                  router.push(`/plant/${s.url_slug}`);
                 }}
                 className="block w-full px-4 py-2 text-left text-[15px] text-ink hover:bg-surface"
               >

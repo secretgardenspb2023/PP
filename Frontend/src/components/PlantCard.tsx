@@ -4,7 +4,7 @@ import type { PlantListItem } from "@/lib/api";
 export function PlantCard({ plant }: { plant: PlantListItem }) {
   return (
     <Link
-      href={`/plant/${plant.id_plant}`}
+      href={`/plant/${plant.url_slug}`}
       className="group relative flex flex-col overflow-hidden rounded-card border border-line bg-white shadow-soft transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-1.5 hover:border-brand/40 hover:shadow-card"
     >
       <div className="relative aspect-4/3 overflow-hidden">

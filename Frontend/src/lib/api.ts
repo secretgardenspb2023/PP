@@ -133,8 +133,10 @@ export function getFacets(
   return getJSON(`/plants/facets/${qs(params)}`, init);
 }
 
-export function getPlant(id: number | string, init?: RequestInit): Promise<PlantDetail> {
-  return getJSON(`/plants/${id}/`, init);
+export function getPlant(idOrSlug: number | string, init?: RequestInit): Promise<PlantDetail> {
+  // idOrSlug — числовой id или url_slug (ЧПУ). Кодируем для безопасных слагов
+  // (кириллица/спецсимволы); бэкенд резолвит и по id, и по слагу.
+  return getJSON(`/plants/${encodeURIComponent(String(idOrSlug))}/`, init);
 }
 
 export function search(

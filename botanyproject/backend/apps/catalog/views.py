@@ -86,6 +86,21 @@ class PlantViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Ge
     def get_serializer_class(self):
         return PlantDetailSerializer if self.action == "retrieve" else PlantListSerializer
 
+    def get_object(self):
+        """Открываем карточку по url_slug (ЧПУ) или по числовому id. Слаги почти
+        уникальны (несколько дублей) — для дубля берём карточку с меньшим id."""
+        from django.http import Http404
+
+        lookup = str(self.kwargs.get("pk", ""))
+        qs = self.get_queryset()
+        if lookup.isdigit():
+            obj = qs.filter(id_plant=lookup).first()
+        else:
+            obj = qs.filter(url_slug=lookup).order_by("id_plant").first()
+        if obj is None:
+            raise Http404("Растение не найдено")
+        return obj
+
     def get_queryset(self):
         if self.action == "retrieve":
             return _detail_queryset()

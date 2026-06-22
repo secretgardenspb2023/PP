@@ -52,3 +52,7 @@ Thumbs.db
 # Local offline wheelhouse (see backend/Dockerfile); keep the dir, ignore wheels.
 /backend/wheels/*
 !/backend/wheels/.gitkeep
+
+# ---- Runtime secrets / certs (staging) ----
+infra/certbot/
+infra/nginx/.htpasswd

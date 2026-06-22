@@ -56,7 +56,8 @@ imgproxy, кэш и брокер задач — Redis + Celery.
   модель `User` привязана (этап 3), см. docs/database.md.
 - Согласование схемы: новые колонки (status/author/updated_at) + нормализация jsonb→справочники — см. docs/database.md.
 - VPS HandyHost, домен/DNS — блокируют серверную часть этапа 1.
-- ~~OAuth Google/Telegram, SmartCaptcha~~ — готово. ~~**VK** (ключи приложения VK ID)~~ — ключи получены, лежат в серверном `.env`; код VK-входа готов (classic `oauth.vk.com` flow), redirect проверяется на staging, полный вход с согласием — на приёмке заказчиком.
+- ~~OAuth Google/Telegram, SmartCaptcha~~ — готово. ~~**VK**~~ — мигрирован на **VK ID (OAuth 2.1 + PKCE)** (старый `oauth.vk.com` отключён Яндексом/VK → «Security Error»); **вход подтверждён на staging end-to-end**. SmartCaptcha — невидимый режим, рабочий (CSP разрешает blob-воркер).
+- ~~Бэкапы БД в S3 (ТЗ 1.10)~~ — работают: ежедневный cron 03:30 → зашифрованный дамп в `s3://botany-media-bucket/backups/` (ротация 7/4/12). Был баг (скрипт без +x, cron падал) — исправлено.
 - Админ-аккаунт заказчика в `user_info.users` (ТЗ 3.2) — заведём по `createsuperuser`, когда заказчик даст логин/email/пароль.
 - ~~S3-доступы~~ — получены, этап 4 закрыт.
 - Figma-подтверждение + брендинг — блокируют этап 6.

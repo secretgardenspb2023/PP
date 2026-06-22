@@ -18,44 +18,49 @@ from apps.accounts import audit, oauth
 # --------------------------------------------------------------------------- #
 @override_settings(VK_APP_ID="123456", VK_REDIRECT_URI="https://x.ru/api/v1/auth/vk/callback/")
 def test_vk_auth_url_has_required_params():
-    url = oauth.vk_auth_url("state-token-xyz")
+    # VK ID (OAuth 2.1 + PKCE): authorize on id.vk.com with a code_challenge.
+    url = oauth.vk_auth_url("state-token-xyz", "challenge-abc")
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
-    assert parsed.netloc == "oauth.vk.com"
+    assert parsed.netloc == "id.vk.com"
     assert qs["client_id"] == ["123456"]
     assert qs["redirect_uri"] == ["https://x.ru/api/v1/auth/vk/callback/"]
     assert qs["response_type"] == ["code"]
     assert qs["scope"] == ["email"]
     assert qs["state"] == ["state-token-xyz"]
+    assert qs["code_challenge"] == ["challenge-abc"]
+    assert qs["code_challenge_method"] == ["S256"]
 
 
 def test_vk_exchange_parses_token_and_profile(monkeypatch):
-    """vk_exchange should read user_id+email from the token response and the
-    first/last name from users.get."""
+    """vk_exchange (VK ID + PKCE) reads user_id from the token response and
+    name+email from user_info."""
     calls = []
 
-    def fake_get_url(url):
+    def fake_post_form(url, data):
         calls.append(url)
-        if "access_token" in url and "method/users.get" in url:
-            return {"response": [{"first_name": "Иван", "last_name": "Петров"}]}
+        if url == oauth.VK_USERINFO_URL:
+            return {"user": {"user_id": 777, "first_name": "Иван", "last_name": "Петров",
+                             "email": "ivan@vk.example", "avatar": "https://vk/ava.jpg"}}
         # token endpoint
-        return {"access_token": "tok", "user_id": 777, "email": "ivan@vk.example"}
+        return {"access_token": "tok", "user_id": 777}
 
-    monkeypatch.setattr(oauth, "_get_url", fake_get_url)
-    profile = oauth.vk_exchange("auth-code")
-    assert profile == {"id": "777", "email": "ivan@vk.example", "name": "Иван Петров"}
-    assert len(calls) == 2  # token + users.get
+    monkeypatch.setattr(oauth, "_post_form", fake_post_form)
+    profile = oauth.vk_exchange("auth-code", "verifier", "device-id")
+    assert profile == {"id": "777", "email": "ivan@vk.example", "name": "Иван Петров",
+                       "avatar": "https://vk/ava.jpg"}
+    assert len(calls) == 2  # token + user_info
 
 
 def test_vk_exchange_without_email(monkeypatch):
     """When VK returns no email, the profile email is None (keyed by VK id later)."""
-    def fake_get_url(url):
-        if "method/users.get" in url:
-            return {"response": [{"first_name": "А", "last_name": ""}]}
+    def fake_post_form(url, data):
+        if url == oauth.VK_USERINFO_URL:
+            return {"user": {"user_id": 1, "first_name": "А", "last_name": ""}}
         return {"access_token": "tok", "user_id": 1}
 
-    monkeypatch.setattr(oauth, "_get_url", fake_get_url)
-    profile = oauth.vk_exchange("code")
+    monkeypatch.setattr(oauth, "_post_form", fake_post_form)
+    profile = oauth.vk_exchange("code", "verifier", "device-id")
     assert profile["id"] == "1"
     assert profile["email"] is None
 

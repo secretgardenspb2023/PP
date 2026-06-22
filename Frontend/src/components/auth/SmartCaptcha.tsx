@@ -7,7 +7,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 // (NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY пуст) — компонент ничего не рисует и
 // execute() возвращает пустую строку, т.е. капча просто отключена на клиенте.
 const SITEKEY = process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY;
-const SCRIPT_SRC = "https://smartcaptcha.yandexcloud.net/captcha.js?render=onload";
+const SCRIPT_SRC = "https://smartcaptcha.yandexcloud.net/captcha.js";
 
 type SmartCaptchaApi = {
   render: (el: HTMLElement, opts: Record<string, unknown>) => number;
@@ -23,39 +23,44 @@ declare global {
 
 export type CaptchaHandle = { execute: () => Promise<string> };
 
-function loadScript(): Promise<void> {
+// Грузим скрипт один раз и ждём, пока window.smartCaptcha реально появится
+// (после события load API инициализируется не мгновенно — опрашиваем).
+function whenReady(): Promise<SmartCaptchaApi> {
   return new Promise((resolve, reject) => {
-    if (window.smartCaptcha) return resolve();
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src^="https://smartcaptcha.yandexcloud.net/captcha.js"]',
-    );
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("captcha")));
-      return;
+    if (window.smartCaptcha) return resolve(window.smartCaptcha);
+    if (!document.querySelector(`script[src^="${SCRIPT_SRC}"]`)) {
+      const s = document.createElement("script");
+      s.src = SCRIPT_SRC;
+      s.async = true;
+      s.defer = true;
+      document.head.appendChild(s);
     }
-    const s = document.createElement("script");
-    s.src = SCRIPT_SRC;
-    s.async = true;
-    s.defer = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("captcha"));
-    document.head.appendChild(s);
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (window.smartCaptcha) {
+        window.clearInterval(timer);
+        resolve(window.smartCaptcha);
+      } else if (Date.now() - started > 12000) {
+        window.clearInterval(timer);
+        reject(new Error("smartcaptcha: API не загрузилось"));
+      }
+    }, 100);
   });
 }
 
 export const SmartCaptcha = forwardRef<CaptchaHandle>(function SmartCaptcha(_props, ref) {
   const elRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<number | null>(null);
+  const executedRef = useRef(false);
   const resolverRef = useRef<((t: string) => void) | null>(null);
 
   useEffect(() => {
     if (!SITEKEY || !elRef.current) return;
     let cancelled = false;
-    loadScript()
-      .then(() => {
-        if (cancelled || !window.smartCaptcha || !elRef.current || widgetIdRef.current !== null) return;
-        widgetIdRef.current = window.smartCaptcha.render(elRef.current, {
+    whenReady()
+      .then((api) => {
+        if (cancelled || !elRef.current || widgetIdRef.current !== null) return;
+        widgetIdRef.current = api.render(elRef.current, {
           sitekey: SITEKEY,
           invisible: true,
           hideShield: true,
@@ -66,7 +71,7 @@ export const SmartCaptcha = forwardRef<CaptchaHandle>(function SmartCaptcha(_pro
           },
         });
       })
-      .catch(() => {});
+      .catch((e) => console.warn(e));
     return () => {
       cancelled = true;
     };
@@ -77,10 +82,12 @@ export const SmartCaptcha = forwardRef<CaptchaHandle>(function SmartCaptcha(_pro
     () => ({
       execute: () =>
         new Promise<string>((resolve) => {
-          if (!SITEKEY || widgetIdRef.current === null || !window.smartCaptcha) return resolve("");
+          const api = window.smartCaptcha;
+          if (!SITEKEY || widgetIdRef.current === null || !api) return resolve("");
           resolverRef.current = resolve;
-          window.smartCaptcha.reset(widgetIdRef.current);
-          window.smartCaptcha.execute(widgetIdRef.current);
+          if (executedRef.current) api.reset(widgetIdRef.current); // повторный сабмит → свежий токен
+          executedRef.current = true;
+          api.execute(widgetIdRef.current);
         }),
     }),
     [],

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { register } from "@/lib/auth";
+import { SmartCaptcha, type CaptchaHandle } from "@/components/auth/SmartCaptcha";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -12,13 +13,15 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const captchaRef = useRef<CaptchaHandle>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await register(email, fullName, password);
+      const captchaToken = (await captchaRef.current?.execute()) ?? "";
+      await register(email, fullName, password, captchaToken);
       // Письмо с кодом ушло — отправляем пользователя на экран ввода кода.
       router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
@@ -72,6 +75,8 @@ export default function RegisterPage() {
               Минимум 8 символов, не только цифры и не слишком простой.
             </span>
           </label>
+
+          <SmartCaptcha ref={captchaRef} />
 
           <button
             type="submit"

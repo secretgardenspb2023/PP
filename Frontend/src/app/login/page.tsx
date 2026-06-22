@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { TelegramLogin } from "@/components/auth/TelegramLogin";
+import { SmartCaptcha, type CaptchaHandle } from "@/components/auth/SmartCaptcha";
 import { googleLoginUrl, vkLoginUrl } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -14,15 +15,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Капчу показываем только после неудачной попытки (бэкенд возвращает
+  // captcha_required) — на первом входе её нет.
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const captchaRef = useRef<CaptchaHandle>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await signIn(email, password);
+      const captchaToken = captchaRequired ? ((await captchaRef.current?.execute()) ?? "") : undefined;
+      await signIn(email, password, captchaToken);
       router.push("/profile");
     } catch (err) {
+      const data = (err as { data?: { captcha_required?: boolean } }).data;
+      if (data?.captcha_required) setCaptchaRequired(true);
       setError(err instanceof Error ? err.message : "Не удалось войти");
     } finally {
       setBusy(false);
@@ -58,6 +66,8 @@ export default function LoginPage() {
               autoComplete="current-password"
             />
           </Field>
+
+          {captchaRequired && <SmartCaptcha ref={captchaRef} />}
 
           <button
             type="submit"

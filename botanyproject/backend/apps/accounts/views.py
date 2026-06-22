@@ -53,6 +53,19 @@ def _client_ip(request):
     return xff.split(",")[0].strip() if xff else request.META.get("REMOTE_ADDR")
 
 
+def _login_captcha_required(email):
+    """Капча на входе нужна только после неудачной попытки (ТЗ 3.8): если у
+    этого email есть незакрытая запись о провале (django-axes её удаляет при
+    успешном входе и по истечении cool-off). No-op, когда капча выключена."""
+    if not settings.SMARTCAPTCHA_ENABLED:
+        return False
+    try:
+        from axes.models import AccessAttempt
+        return AccessAttempt.objects.filter(username=email, failures_since_start__gte=1).exists()
+    except Exception:  # noqa: BLE001 — отсутствие таблицы/axes не должно ломать вход
+        return False
+
+
 def _set_refresh_cookie(response, refresh):
     response.set_cookie(
         settings.AUTH_REFRESH_COOKIE,
@@ -208,6 +221,13 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
+        if _login_captcha_required(email) and not captcha.verify_captcha(
+            request.data.get("captcha_token"), _client_ip(request)
+        ):
+            return Response(
+                {"detail": "Подтвердите, что вы не робот.", "captcha_required": True},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         try:
             # Pass the underlying Django HttpRequest so django-axes can read the
             # client IP and record attempts (it does not understand DRF's Request).
@@ -224,7 +244,11 @@ class LoginView(APIView):
             )
         if user is None:
             audit.log_event("login_failed", request=request, email=email)
-            return Response({"detail": "Неверный email или пароль."}, status=status.HTTP_401_UNAUTHORIZED)
+            # После провала следующая попытка потребует капчу — подсказываем фронту.
+            return Response(
+                {"detail": "Неверный email или пароль.", "captcha_required": settings.SMARTCAPTCHA_ENABLED},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         if not user.is_active:
             audit.log_event("login_inactive", request=request, user=user)
             return Response({"detail": "Email не подтверждён."}, status=status.HTTP_403_FORBIDDEN)

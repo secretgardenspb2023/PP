@@ -25,7 +25,13 @@ async function post(path: string, body?: unknown, token?: string) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(errorMessage(data, res.status));
+  if (!res.ok) {
+    // Прокидываем разобранное тело в ошибку, чтобы вызывающий код мог прочитать
+    // флаги вроде captcha_required (а не только текст сообщения).
+    const err = new Error(errorMessage(data, res.status)) as Error & { data?: unknown };
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 
@@ -46,12 +52,21 @@ function errorMessage(data: unknown, status: number): string {
   return `Ошибка (${status})`;
 }
 
-export async function login(email: string, password: string): Promise<{ access: string }> {
-  return post("/login/", { email, password }) as Promise<{ access: string }>;
+export async function login(
+  email: string,
+  password: string,
+  captchaToken?: string,
+): Promise<{ access: string }> {
+  return post("/login/", { email, password, captcha_token: captchaToken }) as Promise<{ access: string }>;
 }
 
-export async function register(email: string, full_name: string, password: string) {
-  return post("/register/", { email, full_name, password });
+export async function register(
+  email: string,
+  full_name: string,
+  password: string,
+  captchaToken?: string,
+) {
+  return post("/register/", { email, full_name, password, captcha_token: captchaToken });
 }
 
 export async function refresh(): Promise<{ access: string }> {

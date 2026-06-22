@@ -131,6 +131,8 @@ services:
         NEXT_PUBLIC_API_BASE: /api/v1
         # Telegram Login Widget bot (ТЗ 3.5). Бот должен иметь /setdomain на текущий домен.
         NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+        # Yandex SmartCaptcha client (site) key — невидимая капча (ТЗ 3.8). Пусто = выкл.
+        NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY: ${SMARTCAPTCHA_CLIENT_KEY:-}
     environment:
       NODE_ENV: production
       # server-side (RSC) fetches use the internal backend address

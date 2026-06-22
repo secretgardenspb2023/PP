@@ -6,7 +6,7 @@ import * as auth from "@/lib/auth";
 type AuthState = {
   user: auth.User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   applySession: (access: string, user: auth.User) => void;
@@ -36,8 +36,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void loadFromRefresh();
   }, [loadFromRefresh]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { access } = await auth.login(email, password);
+  const signIn = useCallback(async (email: string, password: string, captchaToken?: string) => {
+    const { access } = await auth.login(email, password, captchaToken);
     setToken(access);
     setUser(await auth.me(access));
   }, []);

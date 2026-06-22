@@ -34,9 +34,18 @@ export default function ProfilePage() {
         <h1 className="mb-6 text-[32px] font-bold text-ink">Личный кабинет</h1>
 
         <div className="flex items-center gap-4 rounded-card border border-line bg-white p-6">
-          <div className="grid size-16 shrink-0 place-items-center rounded-full bg-brand/15 text-2xl font-bold text-brand">
-            {(user.full_name || user.email).charAt(0).toUpperCase()}
-          </div>
+          {user.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={String(user.avatar_url)}
+              alt={user.full_name || "Аватар"}
+              className="size-16 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="grid size-16 shrink-0 place-items-center rounded-full bg-brand/15 text-2xl font-bold text-brand">
+              {(user.full_name || user.email).charAt(0).toUpperCase()}
+            </div>
+          )}
           <div className="min-w-0">
             <p className="truncate text-[20px] font-semibold text-ink">
               {user.full_name || "Пользователь"}

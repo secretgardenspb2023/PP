@@ -75,6 +75,7 @@ def google_exchange(code):
         "email": info.get("email"),
         "email_verified": bool(info.get("email_verified")),
         "name": info.get("name", ""),
+        "avatar": info.get("picture"),
     }
 
 
@@ -128,8 +129,8 @@ def vk_exchange(code, code_verifier, device_id):
     access_token = token["access_token"]
     uid = token.get("user_id")
     # VK ID отдаёт email (и phone) обычно прямо в ответе на обмен токена, когда
-    # пользователь выдал scope email; user_info — запасной источник.
-    email, name = token.get("email"), ""
+    # пользователь выдал scope email; user_info — запасной источник + аватар/имя.
+    email, name, avatar = token.get("email"), "", None
     try:
         info = _post_form(
             VK_USERINFO_URL,
@@ -139,9 +140,10 @@ def vk_exchange(code, code_verifier, device_id):
         uid = u.get("user_id", uid)
         email = email or u.get("email")
         name = " ".join(filter(None, [u.get("first_name"), u.get("last_name")]))
-    except Exception:  # noqa: BLE001 — email/name are optional
+        avatar = u.get("avatar")
+    except Exception:  # noqa: BLE001 — email/name/avatar are optional
         pass
-    return {"id": str(uid), "email": email, "name": name}
+    return {"id": str(uid), "email": email, "name": name, "avatar": avatar}
 
 
 def verify_telegram(data, bot_token):
@@ -155,30 +157,40 @@ def verify_telegram(data, bot_token):
     return hmac.compare_digest(digest, received)
 
 
-def link_or_create_by_email(email, name, provider, social_id):
+def _set_avatar(user, avatar):
+    """Сохранить/обновить аватар из соцсети, если пришёл и изменился."""
+    if avatar and user.avatar_url != avatar:
+        user.avatar_url = avatar
+        user.save(update_fields=["avatar_url"])
+
+
+def link_or_create_by_email(email, name, provider, social_id, avatar=None):
     """Merge by verified email, else create (ТЗ 3.6)."""
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
-        user = User.objects.create_user(email=email, full_name=name, is_active=True)
+        user = User.objects.create_user(email=email, full_name=name, is_active=True, avatar_url=avatar or None)
     if not user.social_id:
         user.social_provider = provider
         user.social_id = str(social_id)
         user.save(update_fields=["social_provider", "social_id"])
+    _set_avatar(user, avatar)
     return user
 
 
-def get_or_create_social(provider, social_id, *, email=None, name=""):
+def get_or_create_social(provider, social_id, *, email=None, name="", avatar=None):
     """Key by (provider, social_id); fall back to a synthetic email when the
-    provider gives none (Telegram)."""
+    provider gives none (Telegram). Аватар сохраняем при наличии."""
     user = User.objects.filter(social_provider=provider, social_id=str(social_id)).first()
     if user is not None:
+        _set_avatar(user, avatar)
         return user
     if email:
-        return link_or_create_by_email(email, name, provider, social_id)
+        return link_or_create_by_email(email, name, provider, social_id, avatar=avatar)
     return User.objects.create_user(
         email=f"{provider}-{social_id}@social.poiskplant.ru",
         full_name=name,
         is_active=True,
         social_provider=provider,
         social_id=str(social_id),
+        avatar_url=avatar or None,
     )

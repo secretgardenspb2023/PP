@@ -8,6 +8,8 @@ export type User = {
   email: string;
   full_name?: string;
   is_active?: boolean;
+  avatar_url?: string | null;
+  social_provider?: string | null;
   [k: string]: unknown;
 };
 

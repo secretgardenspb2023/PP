@@ -511,7 +511,9 @@ class GoogleCallbackView(APIView):
             return Response({"detail": "Не удалось получить профиль Google."}, status=status.HTTP_502_BAD_GATEWAY)
         if not profile.get("email") or not profile["email_verified"]:
             return Response({"detail": "Google не подтвердил email."}, status=status.HTTP_400_BAD_REQUEST)
-        user = oauth.link_or_create_by_email(profile["email"], profile["name"], PROVIDER_GOOGLE, profile["sub"])
+        user = oauth.link_or_create_by_email(
+            profile["email"], profile["name"], PROVIDER_GOOGLE, profile["sub"], avatar=profile.get("avatar")
+        )
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_GOOGLE)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
         _set_refresh_cookie(response, RefreshToken.for_user(user))
@@ -537,7 +539,7 @@ class TelegramLoginView(APIView):
         except ValueError:
             return Response({"detail": "Некорректные данные."}, status=status.HTTP_400_BAD_REQUEST)
         name = " ".join(filter(None, [data.get("first_name"), data.get("last_name")]))
-        user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name)
+        user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name, avatar=data.get("photo_url"))
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_TELEGRAM)
         return _tokens_response(user, body_extra={"user": UserSerializer(user).data})
 
@@ -561,7 +563,7 @@ class TelegramCallbackView(APIView):
         except ValueError:
             return redirect(f"{settings.FRONTEND_URL}/auth/callback?error=denied")
         name = " ".join(filter(None, [data.get("first_name"), data.get("last_name")]))
-        user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name)
+        user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name, avatar=data.get("photo_url"))
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_TELEGRAM)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
         _set_refresh_cookie(response, RefreshToken.for_user(user))
@@ -607,7 +609,8 @@ class VKCallbackView(APIView):
         except Exception:  # noqa: BLE001 — upstream/network failure
             return Response({"detail": "Не удалось получить профиль VK."}, status=status.HTTP_502_BAD_GATEWAY)
         user = oauth.get_or_create_social(
-            PROVIDER_VK, profile["id"], email=profile.get("email"), name=profile["name"]
+            PROVIDER_VK, profile["id"], email=profile.get("email"), name=profile["name"],
+            avatar=profile.get("avatar"),
         )
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_VK)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")

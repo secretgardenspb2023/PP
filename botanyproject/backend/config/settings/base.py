@@ -142,7 +142,11 @@ SPECTACULAR_SETTINGS = {
 # ---- JWT auth (ТЗ Этап 3.4: access-токен + refresh в HttpOnly cookie) ----
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
+    # Окно бездействия обычных пользователей — практически бессрочно (10 лет).
+    # Активные не разлогиниваются вообще благодаря ротации refresh-токенов.
+    # Для админов (is_staff) срок переопределяется на 7 дней в
+    # apps.accounts.views._refresh_for (одной глобальной настройкой не развести).
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=3650),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
@@ -152,6 +156,9 @@ AUTH_REFRESH_COOKIE = "refresh_token"
 AUTH_REFRESH_COOKIE_PATH = "/api/v1/auth/"
 AUTH_REFRESH_COOKIE_SAMESITE = "Lax"
 AUTH_REFRESH_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=not DEBUG)
+# Сессия Django-админки (/admin/) — 7 дней ради безопасности (ТЗ 3). SPA на
+# JWT, поэтому это влияет только на админку и DRF session-auth.
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7
 # Base URL the frontend uses in verification / password-reset emails.
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 

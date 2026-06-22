@@ -14,8 +14,12 @@ from apps.catalog.serializers import PlantDetailSerializer, display_name
 def _plant(*, name_rus, genus_rus, species_rus, genus_lat="Quercus",
            species_lat="robur", lat_name="Quercus robur", rus_name_unique=""):
     family = SimpleNamespace(family_lat="Fagaceae", family_rus="Буковые")
-    genus = SimpleNamespace(name=genus_lat, rus_name=genus_rus, family=family)
-    species = SimpleNamespace(name=species_lat, rus_name=species_rus, genus=genus)
+    # build_document собирает синонимы всех уровней (род + вид + растение),
+    # поэтому у заглушек рода и вида тоже должен быть .synonyms.all().
+    genus = SimpleNamespace(name=genus_lat, rus_name=genus_rus, family=family,
+                            synonyms=SimpleNamespace(all=lambda: []))
+    species = SimpleNamespace(name=species_lat, rus_name=species_rus, genus=genus,
+                              synonyms=SimpleNamespace(all=lambda: []))
     return SimpleNamespace(
         id_plant=9760, url_slug="quercus-robur", species=species,
         name_rus=name_rus, rus_name_unique=rus_name_unique,

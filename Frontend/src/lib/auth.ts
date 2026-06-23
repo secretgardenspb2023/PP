@@ -69,6 +69,17 @@ export async function register(
   return post("/register/", { email, full_name, password, captcha_token: captchaToken });
 }
 
+// Шаг 1: запросить письмо со ссылкой на сброс (требует капчу). Бэкенд всегда
+// отвечает 200 и не раскрывает, зарегистрирован ли email.
+export async function requestPasswordReset(email: string, captchaToken?: string) {
+  return post("/password/reset/", { email, captcha_token: captchaToken });
+}
+
+// Шаг 2: задать новый пароль по uid+token из ссылки в письме.
+export async function confirmPasswordReset(uid: string, token: string, newPassword: string) {
+  return post("/password/reset/confirm/", { uid, token, new_password: newPassword });
+}
+
 export async function refresh(): Promise<{ access: string }> {
   return post("/token/refresh/") as Promise<{ access: string }>;
 }

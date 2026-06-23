@@ -67,6 +67,15 @@ export default function LoginPage() {
             />
           </Field>
 
+          <div className="-mt-2 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-[13px] text-muted transition-colors hover:text-brand"
+            >
+              Забыли пароль?
+            </Link>
+          </div>
+
           {captchaRequired && <SmartCaptcha ref={captchaRef} />}
 
           <button

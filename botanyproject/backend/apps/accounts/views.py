@@ -7,7 +7,6 @@ and logout. OAuth (Google/VK/Telegram) and 2FA are added later.
 import base64
 import binascii
 import time
-from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -67,29 +66,11 @@ def _login_captcha_required(email):
         return False
 
 
-# Срок жизни refresh-токена по роли (ТЗ 3): админам — короткая сессия ради
-# безопасности (7 дней), обычным пользователям — практически бессрочно (берётся
-# из SIMPLE_JWT.REFRESH_TOKEN_LIFETIME). Благодаря ротации активные пользователи
-# не разлогиниваются вообще; этот срок — лишь окно бездействия.
-ADMIN_REFRESH_LIFETIME = timedelta(days=7)
-
-
-def _refresh_for(user):
-    """Выдать refresh-токен с учётом роли (короткий для is_staff)."""
-    refresh = RefreshToken.for_user(user)
-    if user.is_staff:
-        refresh.set_exp(lifetime=ADMIN_REFRESH_LIFETIME)
-    return refresh
-
-
 def _set_refresh_cookie(response, refresh):
-    # max_age совпадает с реальным сроком токена (у админа короче), чтобы кука не
-    # «жила» дольше токена.
-    max_age = max(0, int(refresh["exp"] - datetime.now(timezone.utc).timestamp()))
     response.set_cookie(
         settings.AUTH_REFRESH_COOKIE,
         str(refresh),
-        max_age=max_age,
+        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
         httponly=True,
         secure=settings.AUTH_REFRESH_COOKIE_SECURE,
         samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
@@ -98,7 +79,7 @@ def _set_refresh_cookie(response, refresh):
 
 
 def _tokens_response(user, body_extra=None, code=status.HTTP_200_OK):
-    refresh = _refresh_for(user)
+    refresh = RefreshToken.for_user(user)
     body = {"access": str(refresh.access_token)}
     if body_extra:
         body.update(body_extra)
@@ -366,7 +347,7 @@ class PasswordResetConfirmView(APIView):
             user.is_active = True
         user.save()
         audit.log_event("password_reset_done", request=request, user=user)
-        return Response({"detail": "Пароль изменён."})
+        return Response({"detail": "Пароль изменён.", "login": user.login, "email": user.email})
 
 
 class MeView(APIView):
@@ -559,7 +540,7 @@ class GoogleCallbackView(APIView):
         )
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_GOOGLE)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
-        _set_refresh_cookie(response, _refresh_for(user))
+        _set_refresh_cookie(response, RefreshToken.for_user(user))
         return response
 
 
@@ -609,7 +590,7 @@ class TelegramCallbackView(APIView):
         user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name, avatar=data.get("photo_url"))
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_TELEGRAM)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
-        _set_refresh_cookie(response, _refresh_for(user))
+        _set_refresh_cookie(response, RefreshToken.for_user(user))
         return response
 
 
@@ -657,5 +638,5 @@ class VKCallbackView(APIView):
         )
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_VK)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
-        _set_refresh_cookie(response, _refresh_for(user))
+        _set_refresh_cookie(response, RefreshToken.for_user(user))
         return response

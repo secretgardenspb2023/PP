@@ -14,6 +14,7 @@ function ResetInner() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "busy" | "ok">("idle");
+  const [account, setAccount] = useState("");
 
   const linkValid = Boolean(uid && token);
 
@@ -26,9 +27,10 @@ function ResetInner() {
     }
     setState("busy");
     try {
-      await confirmPasswordReset(uid, token, password);
+      const res = await confirmPasswordReset(uid, token, password);
+      setAccount(res.login || res.email || "");
       setState("ok");
-      setTimeout(() => router.replace("/login"), 1800);
+      setTimeout(() => router.replace("/login"), 3500);
     } catch (err) {
       setState("idle");
       setError(err instanceof Error ? err.message : "Не удалось изменить пароль.");
@@ -55,7 +57,16 @@ function ResetInner() {
         <div className="mx-auto mb-3 grid size-12 place-items-center rounded-full bg-brand/15 text-2xl text-brand">
           ✓
         </div>
-        <p className="text-[16px] text-ink">Пароль изменён. Перенаправляем ко входу…</p>
+        <p className="text-[16px] text-ink">
+          {account ? (
+            <>
+              Логин <span className="font-semibold">{account}</span> — пароль успешно изменён.
+            </>
+          ) : (
+            "Пароль успешно изменён."
+          )}
+        </p>
+        <p className="mt-2 text-[14px] text-muted">Перенаправляем ко входу…</p>
       </div>
     );
   }

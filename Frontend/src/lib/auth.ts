@@ -76,8 +76,17 @@ export async function requestPasswordReset(email: string, captchaToken?: string)
 }
 
 // Шаг 2: задать новый пароль по uid+token из ссылки в письме.
-export async function confirmPasswordReset(uid: string, token: string, newPassword: string) {
-  return post("/password/reset/confirm/", { uid, token, new_password: newPassword });
+// Возвращает логин/email аккаунта, чтобы показать их на экране успеха.
+export async function confirmPasswordReset(
+  uid: string,
+  token: string,
+  newPassword: string,
+): Promise<{ detail: string; login?: string; email?: string }> {
+  return post("/password/reset/confirm/", { uid, token, new_password: newPassword }) as Promise<{
+    detail: string;
+    login?: string;
+    email?: string;
+  }>;
 }
 
 export async function refresh(): Promise<{ access: string }> {

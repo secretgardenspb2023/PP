@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getPlant, type PlantDetail } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
 
@@ -94,6 +94,13 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
     plant = await getPlant(id, { cache: "no-store" });
   } catch {
     notFound();
+  }
+
+  // Открыли по числовому id (так делаем ссылки в QR-ценниках) — ведём на «красивый»
+  // слаг-адрес. Редирект временный (307): слаг строится из названия и может меняться
+  // при нормализации, поэтому id-ссылка всегда приводит на актуальный слаг.
+  if (/^\d+$/.test(id) && plant.url_slug && plant.url_slug !== id) {
+    redirect(`/plant/${encodeURIComponent(plant.url_slug)}`);
   }
 
   const c = plant.characteristics;

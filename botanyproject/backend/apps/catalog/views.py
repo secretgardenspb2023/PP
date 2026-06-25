@@ -131,6 +131,22 @@ class PlantViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Ge
             cache.set(key, data, timeout=600)
         return Response(data)
 
+    @extend_schema(description="Список url_slug всех карточек для карты сайта (sitemap.xml).")
+    @action(detail=False)
+    def sitemap(self, request):
+        # Лёгкий список слагов + дата для генерации sitemap.xml фронтом (SEO, этап 8).
+        data = cache.get("sitemap_slugs")
+        if data is None:
+            seen = {}
+            for slug, created in (
+                m.Plant.objects.exclude(url_slug__isnull=True).exclude(url_slug="")
+                .values_list("url_slug", "created_at")
+            ):
+                seen.setdefault(slug, created)  # дедуп по слагу (есть дубли карточек)
+            data = [{"slug": s, "updated": c} for s, c in seen.items()]
+            cache.set("sitemap_slugs", data, timeout=3600)
+        return Response(data)
+
     @extend_schema(
         parameters=_FILTER_PARAMS,
         description="Гистограммы распределения диапазонных фильтров (высота, диаметр, "

@@ -29,12 +29,32 @@ from .models import (
 
 @admin.register(Plant)
 class PlantAdmin(admin.ModelAdmin):
-    list_display = ("id_plant", "lat_name_unique", "name_rus", "species", "usda_zone", "is_template")
-    list_filter = ("is_template", "is_ishs_registered", "usda_zone")
+    list_display = ("id_plant", "lat_name_unique", "name_rus", "species", "usda_zone",
+                    "is_template", "has_author_description")
+    list_filter = ("is_template", "has_author_description", "is_ishs_registered", "usda_zone")
     search_fields = ("lat_name_unique", "name_rus", "url_slug", "rus_name_unique", "species__name")
     list_select_related = ("species",)
     raw_id_fields = ("species",)
     list_per_page = 50
+    actions = ["make_template"]
+
+    def get_changeform_initial_data(self, request):
+        # Индивидуальное добавление карточки редактором — «авторское описание»
+        # по умолчанию включено (ТЗ №5: защита от будущей массовой перезаписи).
+        return {"has_author_description": True}
+
+    @admin.action(description="Переопределить шаблон вида (сделать выбранную карточку шаблоном)")
+    def make_template(self, request, queryset):
+        # Снимаем is_template с других карточек того же вида, ставим на выбранную —
+        # шаблон уникален в пределах вида (ТЗ №5).
+        n = 0
+        for plant in queryset.select_related("species"):
+            Plant.objects.filter(species_id=plant.species_id).exclude(pk=plant.pk).update(is_template=False)
+            if not plant.is_template:
+                plant.is_template = True
+                plant.save(update_fields=["is_template"])
+            n += 1
+        self.message_user(request, f"Шаблон вида переопределён ({n}).")
 
 
 @admin.register(Species)

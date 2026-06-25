@@ -25,7 +25,8 @@ class Color(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'plant"."dict_colors'
+        # Перенесена из схемы plant в plant_info (по просьбе заказчицы, миграция 0003).
+        db_table = 'plant_info"."dict_colors'
         verbose_name = "цвет"
         verbose_name_plural = "цвета"
 
@@ -112,6 +113,7 @@ class Plant(models.Model):
     id_pp = models.IntegerField("ключ донорских фото", null=True, blank=True)
     usda_zone = models.IntegerField("зона USDA", null=True, blank=True)
     is_template = models.BooleanField("шаблон вида", default=False)
+    has_author_description = models.BooleanField("авторское описание", default=False)
     is_ishs_registered = models.BooleanField("зарегистрирован ISHS", default=False, null=True)
     created_at = models.DateTimeField(null=True, blank=True)
 

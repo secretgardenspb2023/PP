@@ -4,6 +4,11 @@ import { notFound, redirect } from "next/navigation";
 import { getPlant, type PlantDetail } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
 
+// Описание приходит уже санитайзенным HTML с бэкенда (bleach) — рендерим как разметку.
+function RichText({ html, className = "" }: { html: string; className?: string }) {
+  return <div className={`rich-text ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -197,16 +202,12 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
             <Reveal>
               <section className="rounded-card border border-line bg-white p-6 shadow-soft">
                 {plant.descriptions.text && (
-                  <p className="whitespace-pre-line text-[16px] leading-relaxed text-accent-ink">
-                    {plant.descriptions.text}
-                  </p>
+                  <RichText html={plant.descriptions.text} className="text-[16px] leading-relaxed text-accent-ink" />
                 )}
                 {plant.descriptions.facts && (
                   <div className="mt-5">
                     <h3 className="mb-1.5 text-[18px] font-semibold text-ink">Интересные факты</h3>
-                    <p className="whitespace-pre-line text-[16px] leading-relaxed text-accent-ink">
-                      {plant.descriptions.facts}
-                    </p>
+                    <RichText html={plant.descriptions.facts} className="text-[16px] leading-relaxed text-accent-ink" />
                   </div>
                 )}
               </section>
@@ -240,9 +241,7 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
                   {descs.map(([k, label]) => (
                     <div key={String(k)}>
                       <h3 className="mb-1.5 text-[18px] font-semibold text-ink">{label}</h3>
-                      <p className="whitespace-pre-line text-[16px] leading-relaxed text-accent-ink">
-                        {plant.descriptions[k]}
-                      </p>
+                      <RichText html={String(plant.descriptions[k])} className="text-[16px] leading-relaxed text-accent-ink" />
                     </div>
                   ))}
                 </div>

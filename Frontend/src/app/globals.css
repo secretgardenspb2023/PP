@@ -193,3 +193,25 @@
 }
 .rng::-webkit-slider-runnable-track { background: transparent; }
 .rng::-moz-range-track { background: transparent; }
+
+/* Разметка описаний (HTML с бэкенда, санитайз bleach) — возвращаем стили,
+   которые сбрасывает Tailwind preflight (списки, ссылки, абзацы). */
+.rich-text > :first-child { margin-top: 0; }
+.rich-text > :last-child { margin-bottom: 0; }
+.rich-text p { margin: 0 0 0.75em; }
+.rich-text ul,
+.rich-text ol { margin: 0 0 0.75em; padding-left: 1.4em; }
+.rich-text ul { list-style: disc; }
+.rich-text ol { list-style: decimal; }
+.rich-text li { margin: 0.15em 0; }
+.rich-text h3,
+.rich-text h4,
+.rich-text h5 { font-weight: 600; margin: 1em 0 0.4em; color: var(--color-ink); }
+.rich-text a { color: var(--color-brand); text-decoration: underline; }
+.rich-text a:hover { color: var(--color-brand-dark); }
+.rich-text blockquote {
+  margin: 0 0 0.75em;
+  padding-left: 0.9em;
+  border-left: 3px solid var(--color-line);
+  color: var(--color-muted);
+}

@@ -1,17 +1,31 @@
 """DRF serializers for the catalog read-API (ТЗ Этап 5)."""
-from django.utils.html import strip_tags
+import bleach
 from rest_framework import serializers
 
 from . import models as m
 
+# Безопасная разметка в описаниях (ТЗ 9.3): разрешаем базовые теги форматирования,
+# всё остальное (script, style, on*-атрибуты, js:-ссылки) bleach вырезает.
+_ALLOWED_TAGS = [
+    "p", "br", "strong", "b", "em", "i", "u", "ul", "ol", "li",
+    "a", "h3", "h4", "h5", "blockquote", "span", "hr",
+]
+_ALLOWED_ATTRS = {"a": ["href", "title", "rel", "target"]}
+_BLOCK_MARKERS = ("<p", "<br", "<ul", "<ol", "<li", "<h3", "<h4", "<h5", "<blockquote", "<hr")
 
-def _clean_text(value):
-    """Plain text for display: strip any HTML (~8% of descriptions contain tags),
-    trim. Returns None for empty so the frontend can skip the block."""
+
+def _clean_html(value):
+    """Санитайзенный HTML для вывода. Разрешает белый список тегов, вырезает опасное.
+    Если в тексте нет блочных тегов (обычный текст ~92% карточек) — переносы строк
+    превращаем в <br>, чтобы абзацы сохранились. None для пустого."""
     if not value:
         return None
-    text = strip_tags(value).strip()
-    return text or None
+    cleaned = bleach.clean(str(value), tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRS, strip=True).strip()
+    if not cleaned:
+        return None
+    if not any(marker in cleaned.lower() for marker in _BLOCK_MARKERS):
+        cleaned = cleaned.replace("\n", "<br>")
+    return cleaned
 
 
 def _names(manager, attr="name"):
@@ -169,14 +183,15 @@ class PlantDetailSerializer(serializers.ModelSerializer):
         if not d:
             return {}
         return {
-            # Основной текст описания + интересные факты (по запросу заказчика).
-            "text": _clean_text(d.content_text),
-            "facts": _clean_text(d.interesting_facts),
-            "requirements": d.requirements,
-            "problems": d.problems,
-            "diseases_pests": d.diseases_pests,
-            "propagation": d.propagation,
-            "usage": d.usage_info,
+            # Все текстовые поля описания отдаём как санитайзенный HTML (ТЗ 9.3):
+            # редактор может размечать абзацами/списками/ссылками, опасное вырезается.
+            "text": _clean_html(d.content_text),
+            "facts": _clean_html(d.interesting_facts),
+            "requirements": _clean_html(d.requirements),
+            "problems": _clean_html(d.problems),
+            "diseases_pests": _clean_html(d.diseases_pests),
+            "propagation": _clean_html(d.propagation),
+            "usage": _clean_html(d.usage_info),
         }
 
     def get_synonyms(self, obj):

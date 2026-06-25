@@ -27,7 +27,7 @@ export type Paginated<T> = {
   results: T[];
 };
 
-export type FacetValue = { value: string; count: number };
+export type FacetValue = { value: string; count: number; label?: string };
 export type Facets = Record<string, FacetValue[]>;
 
 export type Synonym = {

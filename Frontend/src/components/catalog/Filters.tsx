@@ -7,6 +7,7 @@ import { RangeFilters } from "@/components/catalog/RangeFilters";
 
 // Dimension -> Russian title. Order here drives display order.
 const LABELS: Record<string, string> = {
+  category: "Категория",
   sun: "Освещение",
   soil_acid: "Кислотность почвы",
   care_level: "Уровень ухода",
@@ -96,7 +97,7 @@ export function Filters({ facets, histograms }: { facets: Facets; histograms?: H
                         onChange={() => toggle(dim, f.value)}
                         className="size-4 accent-brand"
                       />
-                      <span className="flex-1">{f.value}</span>
+                      <span className="flex-1">{f.label ?? f.value}</span>
                       <span className="text-muted">{f.count}</span>
                     </label>
                   </li>

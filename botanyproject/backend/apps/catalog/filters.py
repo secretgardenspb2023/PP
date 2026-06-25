@@ -45,6 +45,19 @@ BOOLEANS = {
     "has_aroma": "design__has_aroma",
 }
 
+# Производные категории по зоне зимостойкости USDA (просьба заказчицы): 1–5 —
+# садовые, 6–8 — сезонные, 9+ — комнатные. Выводятся из usda_zone, без поля в БД.
+CATEGORIES = {
+    "garden": (1, 5),
+    "seasonal": (6, 8),
+    "indoor": (9, 99),
+}
+CATEGORY_LABELS = {
+    "garden": "Садовые растения",
+    "seasonal": "Сезонные растения",
+    "indoor": "Комнатные растения",
+}
+
 SORTS = {
     "name": "lat_name_unique",
     "-name": "-lat_name_unique",
@@ -132,6 +145,16 @@ def apply_filters(qs, params, *, exclude=None, exclude_range=None):
     if zones:
         qs = qs.filter(usda_zone__in=zones)
 
+    # Категории по зоне зимостойкости (садовые/сезонные/комнатные) — OR внутри.
+    if exclude != "category":
+        cond = Q()
+        for c in _multi(params, "category"):
+            rng = CATEGORIES.get(c)
+            if rng:
+                cond |= Q(usda_zone__gte=rng[0], usda_zone__lte=rng[1])
+        if cond:
+            qs = qs.filter(cond)
+
     # Алфавитный навигатор (ТЗ 5.17 / дизайн): карточки по первой букве отображаемого
     # имени (rus_name_unique). Спецзначение "#" — всё, что начинается не с буквы.
     letter = (params.get("letter") or "").strip()
@@ -162,6 +185,16 @@ def facet_counts(base_qs, params):
             for row in rows
             if row[path] is not None
         ]
+    # Категории по зоне зимостойкости — отдельный фасет (производный от usda_zone).
+    cat_qs = apply_filters(base_qs, params, exclude="category")
+    facets["category"] = [
+        {
+            "value": key,
+            "label": CATEGORY_LABELS[key],
+            "count": cat_qs.filter(usda_zone__gte=lo, usda_zone__lte=hi).count(),
+        }
+        for key, (lo, hi) in CATEGORIES.items()
+    ]
     return facets
 
 

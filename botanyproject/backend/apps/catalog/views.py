@@ -68,6 +68,7 @@ _FILTER_PARAMS = [
     OpenApiParameter("q", str, description="Текстовый поиск по названиям и таксономии."),
     OpenApiParameter("sort", str, description=f"Сортировка: {', '.join(SORTS)}."),
     OpenApiParameter("usda_zone", str, description="Зоны USDA через запятую (OR)."),
+    OpenApiParameter("category", str, description="Категории по зоне: garden (1-5), seasonal (6-8), indoor (9+); через запятую."),
     *[
         OpenApiParameter(dim, str, description="Несколько значений через запятую (OR).")
         for dim in DIMENSIONS

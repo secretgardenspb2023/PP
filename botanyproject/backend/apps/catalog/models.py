@@ -13,6 +13,8 @@ client-approved step (see docs/database.md).
 """
 from django.db import models
 
+from .naming import build_lat_name, build_rus_name
+
 
 # --------------------------------------------------------------------------- #
 #  Dictionaries
@@ -121,6 +123,19 @@ class Plant(models.Model):
 
     def __str__(self):
         return self.name_rus or self.lat_name_unique or f"растение #{self.pk}"
+
+    def save(self, *args, **kwargs):
+        # Автозаполнение имён из таксономии (ТЗ №3): род+вид (лат) и род+вид+
+        # транскрипция сорта (рус). Только если поле пустое — ручную правку не
+        # затираем. Массовая перетранскрипция — командой `backfill_names`.
+        if self.species_id and (not self.lat_name_unique or not self.rus_name_unique):
+            sp = self.species
+            g = sp.genus
+            if not self.lat_name_unique:
+                self.lat_name_unique = build_lat_name(g.name, sp.name, self.variety)
+            if not self.rus_name_unique:
+                self.rus_name_unique = build_rus_name(g.rus_name, sp.rus_name, self.variety)
+        super().save(*args, **kwargs)
 
 
 class PlantSynonym(models.Model):

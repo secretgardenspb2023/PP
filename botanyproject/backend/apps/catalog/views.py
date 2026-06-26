@@ -84,6 +84,10 @@ _FILTER_PARAMS = [
 class PlantViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """Список карточек с фасетными фильтрами и детальная карточка растения."""
 
+    # ЧПУ-слаги могут содержать точки (из инициалов, напр. «h.e.» в «H.E. Bealle»).
+    # DRF по умолчанию запрещает точки в lookup (regex [^/.]+) → 404. Разрешаем.
+    lookup_value_regex = "[^/]+"
+
     def get_serializer_class(self):
         return PlantDetailSerializer if self.action == "retrieve" else PlantListSerializer
 

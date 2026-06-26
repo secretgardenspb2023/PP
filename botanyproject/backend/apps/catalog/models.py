@@ -154,7 +154,7 @@ class PlantSynonym(models.Model):
         Species, db_column="species_id", on_delete=models.DO_NOTHING, null=True, blank=True, related_name="synonyms",
     )
     plant = models.ForeignKey(
-        Plant, db_column="plant_id", on_delete=models.DO_NOTHING, null=True, blank=True, related_name="synonyms",
+        Plant, db_column="plant_id", on_delete=models.CASCADE, null=True, blank=True, related_name="synonyms",
     )
     is_binomial = models.BooleanField(default=False)
     synonym_lang = models.CharField(max_length=20, choices=LANG_CHOICES, null=True, blank=True)
@@ -176,7 +176,7 @@ class PlantSynonym(models.Model):
 # --------------------------------------------------------------------------- #
 class PlantVisual(models.Model):
     plant = models.OneToOneField(
-        Plant, primary_key=True, db_column="id_plant", on_delete=models.DO_NOTHING, related_name="visual",
+        Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="visual",
     )
     height_max_cm = models.IntegerField(null=True, blank=True)
     diameter_max_cm = models.IntegerField(null=True, blank=True)
@@ -203,7 +203,7 @@ class PlantVisual(models.Model):
 
 class PlantCare(models.Model):
     plant = models.OneToOneField(
-        Plant, primary_key=True, db_column="id_plant", on_delete=models.DO_NOTHING, related_name="care",
+        Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="care",
     )
     sun = models.JSONField(default=list, null=True, blank=True)
     soil_acid = models.JSONField(default=list, null=True, blank=True)
@@ -229,7 +229,7 @@ class PlantCare(models.Model):
 
 class PlantDesign(models.Model):
     plant = models.OneToOneField(
-        Plant, primary_key=True, db_column="id_plant", on_delete=models.DO_NOTHING, related_name="design",
+        Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="design",
     )
     design_uses = models.JSONField(default=list, null=True, blank=True)
     garden_styles = models.JSONField(default=list, null=True, blank=True)
@@ -255,7 +255,7 @@ class PlantDesign(models.Model):
 
 class PlantDescription(models.Model):
     plant = models.OneToOneField(
-        Plant, primary_key=True, db_column="id_plant", on_delete=models.DO_NOTHING, related_name="description",
+        Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="description",
     )
     content_text = models.TextField(null=True, blank=True)
     requirements = models.TextField(null=True, blank=True)
@@ -280,7 +280,7 @@ class PlantDescription(models.Model):
 # --------------------------------------------------------------------------- #
 class PlantPhoto(models.Model):
     plant = models.ForeignKey(
-        Plant, db_column="plant_id", on_delete=models.DO_NOTHING, related_name="photos",
+        Plant, db_column="plant_id", on_delete=models.CASCADE, related_name="photos",
     )
     storage_key = models.TextField(null=True, blank=True)
     public_url = models.TextField()

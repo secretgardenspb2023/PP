@@ -101,6 +101,33 @@ def fix_typos(query):
     return " ".join(TYPO_FIXES.get(w.lower(), w) for w in (query or "").split())
 
 
+# Поля для префиксного поиска по частичному последнему слову (только названия).
+PREFIX_FIELDS = ["rus_name_unique^5", "name_rus_full^5", "name_rus^4", "lat_name^3"]
+
+
+def _match_query(query):
+    """Тело ES-запроса. Для многословных запросов добавляем phrase_prefix — ищем по
+    ЧАСТИ последнего слова («Клематис гибридный Ma» → «…Madame…»). Для одного слова —
+    точное совпадение (чтобы «роза» не цепляла «розовый»)."""
+    base = {
+        "multi_match": {
+            "query": query, "fields": SEARCH_FIELDS,
+            "type": "best_fields", "fuzziness": "AUTO:5,8", "operator": "and",
+        }
+    }
+    if len(query.split()) > 1:
+        return {
+            "bool": {
+                "should": [
+                    base,
+                    {"multi_match": {"query": query, "fields": PREFIX_FIELDS, "type": "phrase_prefix"}},
+                ],
+                "minimum_should_match": 1,
+            }
+        }
+    return base
+
+
 def get_client():
     return Elasticsearch(dj_settings.ELASTICSEARCH_URL, request_timeout=10)
 
@@ -178,15 +205,7 @@ def search(query, *, size=24, offset=0, client=None):
     body = {
         "from": offset,
         "size": size,
-        "query": {
-            "multi_match": {
-                "query": query,
-                "fields": SEARCH_FIELDS,
-                "type": "best_fields",
-                "fuzziness": "AUTO:5,8",
-                "operator": "and",
-            }
-        },
+        "query": _match_query(query),
         "highlight": {
             "pre_tags": ["<mark>"],
             "post_tags": ["</mark>"],
@@ -228,15 +247,7 @@ def search_ids(query, *, limit=10000, client=None):
         "from": 0,
         "size": limit,
         "_source": False,
-        "query": {
-            "multi_match": {
-                "query": query,
-                "fields": SEARCH_FIELDS,
-                "type": "best_fields",
-                "fuzziness": "AUTO:5,8",
-                "operator": "and",
-            }
-        },
+        "query": _match_query(query),
     }
     resp = client.search(index=INDEX, body=body)
     return [int(h["_id"]) for h in resp["hits"]["hits"]]

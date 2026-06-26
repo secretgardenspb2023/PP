@@ -8,7 +8,7 @@ is unavailable (see views). A fuller lemmatizer (analysis-morphology / hunspell)
 can be added to the ES image later without changing this interface.
 """
 from django.conf import settings as dj_settings
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, NotFoundError
 from elasticsearch.helpers import bulk
 
 INDEX = "plants"
@@ -181,6 +181,24 @@ def build_document(plant):
         # Russian name (explicit + taxonomic) + latin + synonyms feed autosuggest (ТЗ 5.6/5.7)
         "suggest": " ".join(filter(None, [rus_name_unique, name_rus, name_rus_full, lat_name, *synonyms])),
     }
+
+
+def _document_body(plant):
+    """Тело документа для одиночной индексации (без _index/_id, которые нужны bulk)."""
+    return {k: v for k, v in build_document(plant).items() if k not in ("_index", "_id")}
+
+
+def index_plant(plant, *, client=None):
+    """Проиндексировать/обновить одну карточку в ES (для авто-синхронизации сигналами)."""
+    (client or get_client()).index(index=INDEX, id=plant.id_plant, document=_document_body(plant))
+
+
+def delete_plant(id_plant, *, client=None):
+    """Убрать карточку из индекса ES; 404 (уже нет) — игнорируем."""
+    try:
+        (client or get_client()).delete(index=INDEX, id=id_plant)
+    except NotFoundError:
+        pass
 
 
 def reindex(queryset, *, client=None, chunk_size=1000):

@@ -106,9 +106,10 @@ PREFIX_FIELDS = ["rus_name_unique^5", "name_rus_full^5", "name_rus^4", "lat_name
 
 
 def _match_query(query):
-    """Тело ES-запроса. Для многословных запросов добавляем phrase_prefix — ищем по
-    ЧАСТИ последнего слова («Клематис гибридный Ma» → «…Madame…»). Для одного слова —
-    точное совпадение (чтобы «роза» не цепляла «розовый»)."""
+    """Тело ES-запроса. Для многословных запросов добавляем bool_prefix — последнее
+    слово ищется как префикс без лимита вариантов («Клематис гибридный Ma» находит и
+    Madame, и Mazury). Для одного слова — точное совпадение (чтобы «роза» не цепляла
+    «розовый»)."""
     base = {
         "multi_match": {
             "query": query, "fields": SEARCH_FIELDS,
@@ -120,7 +121,8 @@ def _match_query(query):
             "bool": {
                 "should": [
                     base,
-                    {"multi_match": {"query": query, "fields": PREFIX_FIELDS, "type": "phrase_prefix"}},
+                    {"multi_match": {"query": query, "fields": PREFIX_FIELDS,
+                                     "type": "bool_prefix", "operator": "and"}},
                 ],
                 "minimum_should_match": 1,
             }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { createReview, getReviews, type Review } from "@/lib/api";
 
@@ -14,7 +15,18 @@ export function PlantReviews({ plantId }: { plantId: number }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // закрытие лайтбокса по Esc
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
   // превью выбранных фото (с очисткой object-URL, чтобы не текла память)
   const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
   useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
@@ -69,14 +81,20 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               {r.photos.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {r.photos.map((p) => (
-                    <a key={p.id} href={p.public_url} target="_blank" rel="noreferrer">
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setLightbox(p.public_url)}
+                      className="cursor-zoom-in"
+                      aria-label="Открыть фото"
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={p.preview_url || p.public_url}
                         alt="фото из отзыва"
-                        className="size-20 rounded-control object-cover"
+                        className="size-20 rounded-control object-cover transition-transform hover:scale-[1.03]"
                       />
-                    </a>
+                    </button>
                   ))}
                 </div>
               )}
@@ -158,6 +176,33 @@ export function PlantReviews({ plantId }: { plantId: number }) {
           </form>
         )}
       </div>
+
+      {lightbox && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            onClick={() => setLightbox(null)}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+            role="dialog"
+            aria-modal="true"
+          >
+            <button
+              type="button"
+              onClick={() => setLightbox(null)}
+              className="absolute right-5 top-3 text-4xl leading-none text-white/90 hover:text-white"
+              aria-label="Закрыть"
+            >
+              ×
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightbox}
+              alt="фото отзыва"
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90vh] max-w-[90vw] rounded-card object-contain"
+            />
+          </div>,
+          document.body,
+        )}
     </section>
   );
 }

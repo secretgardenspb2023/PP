@@ -9,6 +9,8 @@
 """
 import re
 
+from .translit_fixes import CORRECTIONS
+
 # Диграфы/сочетания — заменяем ДО одиночных букв (длинные первыми).
 _DIGRAPHS = [
     ("shch", "щ"), ("sch", "ш"), ("tch", "ч"), ("sh", "ш"), ("ch", "ч"),
@@ -75,7 +77,11 @@ _WORD = re.compile(r"[A-Za-z][A-Za-z'’`]*")  # слово + притяжате
 
 def _token(mo: "re.Match") -> str:
     w = mo.group(0)
-    return w if _ROMAN.match(w) else _translit_word(w)
+    if _ROMAN.match(w):
+        return w
+    res = _translit_word(w)
+    # ручная правка частых слов (от заказчицы): Лигхт→Лайт, Блуе→Блу и т.п.
+    return CORRECTIONS.get(res.lower(), res)
 
 
 def transliterate(text: str | None) -> str:

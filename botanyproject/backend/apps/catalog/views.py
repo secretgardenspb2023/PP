@@ -10,6 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from . import imgproxy, media
@@ -254,7 +255,12 @@ class ReviewListCreateView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
+    throttle_scope = "reviews"
     MAX_PHOTOS = 5
+
+    def get_throttles(self):
+        # Лимит частоты (10/час) — только на создание; чтение остаётся свободным.
+        return [ScopedRateThrottle()] if self.request.method == "POST" else super().get_throttles()
 
     def get(self, request, plant_id):
         qs = (
@@ -266,6 +272,12 @@ class ReviewListCreateView(APIView):
     def post(self, request, plant_id):
         if not m.Plant.objects.filter(id_plant=plant_id).exists():
             return Response({"detail": "Растение не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        # Один отзыв на растение от пользователя — защита от спама одной карточки.
+        if m.Review.objects.filter(plant_id=plant_id, user=request.user).exists():
+            return Response(
+                {"detail": "Вы уже оставляли отзыв к этому растению."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         text = (request.data.get("text") or "").strip()
         if len(text) < 3:
             return Response({"text": ["Напишите текст отзыва."]}, status=status.HTTP_400_BAD_REQUEST)

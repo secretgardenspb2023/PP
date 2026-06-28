@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { createReview, getReviews, type Review } from "@/lib/api";
 
@@ -15,6 +15,9 @@ export function PlantReviews({ plantId }: { plantId: number }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // превью выбранных фото (с очисткой object-URL, чтобы не текла память)
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
 
   useEffect(() => {
     getReviews(plantId)
@@ -106,12 +109,42 @@ export function PlantReviews({ plantId }: { plantId: number }) {
             />
             <input
               ref={fileRef}
+              id="review-photos"
               type="file"
               accept="image/*"
               multiple
               onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))}
-              className="block text-[14px] text-muted"
+              className="hidden"
             />
+            <label
+              htmlFor="review-photos"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-control border-2 border-dashed border-brand/50 bg-brand/5 px-4 py-2.5 text-[14px] font-medium text-brand-dark transition-colors hover:border-brand hover:bg-brand/10"
+            >
+              📷 Прикрепить фото{files.length ? ` (${files.length})` : ""}
+            </label>
+            {previews.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {previews.map((u, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={u}
+                    alt={files[i]?.name}
+                    className="size-16 rounded-control border border-line object-cover"
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFiles([]);
+                    if (fileRef.current) fileRef.current.value = "";
+                  }}
+                  className="self-center text-[13px] text-danger hover:underline"
+                >
+                  очистить
+                </button>
+              </div>
+            )}
             <p className="text-[13px] text-muted">
               Можно прикрепить до 5 фото. Отзыв появится после проверки модератором.
             </p>

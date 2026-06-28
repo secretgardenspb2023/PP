@@ -577,3 +577,59 @@ class PlantFruitingMonth(AbstractPlantLink):
         managed = True
         db_table = 'plant_info"."plant_fruiting_months'
         constraints = [models.UniqueConstraint(fields=["plant", "value"], name="uq_plant_fruiting_month")]
+
+
+# =========================================================================== #
+#  ОТЗЫВЫ (UGC, ТЗ §11 Фаза 2) — Django-managed таблицы.
+#
+#  Пользователь оставляет текст + фото; отзыв проходит модерацию (pending →
+#  approved/rejected). Модератор может пометить фото отзыва «в карточку» — тогда
+#  оно копируется в media.plant_photos (source_type="review") и показывается на
+#  карточке растения. Рейтинг/авторство развиваем позже.
+# =========================================================================== #
+class Review(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "на модерации"),
+        ("approved", "одобрен"),
+        ("rejected", "отклонён"),
+    ]
+    plant = models.ForeignKey(
+        Plant, db_column="id_plant", on_delete=models.CASCADE, related_name="reviews",
+    )
+    user = models.ForeignKey(
+        "accounts.User", db_column="user_id", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="reviews",
+    )
+    author_name = models.CharField("имя автора", max_length=200, blank=True, default="")
+    text = models.TextField("текст отзыва")
+    rating = models.PositiveSmallIntegerField("оценка", null=True, blank=True)  # на будущее
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = 'plant_info"."reviews'
+        ordering = ["-created_at"]
+        verbose_name = "отзыв"
+        verbose_name_plural = "отзывы"
+
+    def __str__(self):
+        return f"Отзыв #{self.pk} к растению #{self.plant_id} ({self.get_status_display()})"
+
+
+class ReviewPhoto(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="photos")
+    storage_key = models.TextField(null=True, blank=True)
+    public_url = models.TextField()
+    preview_url = models.TextField(null=True, blank=True)
+    selected_for_card = models.BooleanField("в карточку", default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = 'plant_info"."review_photos'
+        verbose_name = "фото отзыва"
+        verbose_name_plural = "фото отзывов"
+
+    def __str__(self):
+        return self.public_url

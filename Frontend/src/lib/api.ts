@@ -166,3 +166,42 @@ export function getHistograms(
 ): Promise<Histograms> {
   return getJSON(`/plants/histograms/${qs(params)}`, init);
 }
+
+// ---- Отзывы (ТЗ §11 Фаза 2) ----
+export type ReviewPhoto = { id: number; public_url: string; preview_url: string | null };
+export type Review = {
+  id: number;
+  author_name: string;
+  text: string;
+  rating: number | null;
+  created_at: string;
+  photos: ReviewPhoto[];
+};
+
+export async function getReviews(plantId: number): Promise<{ count: number; results: Review[] }> {
+  const res = await fetch(`${base()}/plants/${plantId}/reviews/`, { cache: "no-store" });
+  if (!res.ok) return { count: 0, results: [] };
+  return res.json();
+}
+
+export async function createReview(
+  plantId: number,
+  text: string,
+  files: File[],
+  token: string,
+): Promise<{ detail: string }> {
+  const form = new FormData();
+  form.append("text", text);
+  for (const f of files) form.append("photos", f);
+  const res = await fetch(`${base()}/plants/${plantId}/reviews/`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }, // Content-Type выставит браузер (multipart)
+    body: form,
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data.detail as string) || data.text?.[0] || "Не удалось отправить отзыв");
+  }
+  return data;
+}

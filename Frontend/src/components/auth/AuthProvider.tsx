@@ -5,6 +5,7 @@ import * as auth from "@/lib/auth";
 
 type AuthState = {
   user: auth.User | null;
+  token: string | null;
   loading: boolean;
   signIn: (email: string, password: string, captchaToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -61,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signOut, refreshUser, applySession }}>
+    <Ctx.Provider value={{ user, token, loading, signIn, signOut, refreshUser, applySession }}>
       {children}
     </Ctx.Provider>
   );

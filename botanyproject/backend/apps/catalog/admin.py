@@ -23,8 +23,11 @@ from .models import (
     Plant,
     PlantPhoto,
     PlantSynonym,
+    Review,
+    ReviewPhoto,
     Species,
 )
+from django.utils.html import format_html
 
 
 @admin.register(Plant)
@@ -119,3 +122,58 @@ admin.site.register(
     ],
     DictAdmin,
 )
+
+
+# --------------------------------------------------------------------------- #
+#  Модерация отзывов (ТЗ §11 Фаза 2)
+# --------------------------------------------------------------------------- #
+class ReviewPhotoInline(admin.TabularInline):
+    model = ReviewPhoto
+    extra = 0
+    fields = ("preview", "selected_for_card")
+    readonly_fields = ("preview",)
+
+    def preview(self, obj):
+        if obj.preview_url:
+            return format_html('<img src="{}" style="height:90px;border-radius:6px"/>', obj.preview_url)
+        return "—"
+    preview.short_description = "фото"
+
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ("id", "plant", "author_name", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("author_name", "text", "plant__rus_name_unique")
+    list_select_related = ("plant",)
+    raw_id_fields = ("plant", "user")
+    inlines = [ReviewPhotoInline]
+    actions = ["approve", "reject"]
+
+    @admin.action(description="Одобрить отзывы")
+    def approve(self, request, queryset):
+        n = queryset.update(status="approved")
+        self.message_user(request, f"Одобрено: {n}.")
+
+    @admin.action(description="Отклонить отзывы")
+    def reject(self, request, queryset):
+        n = queryset.update(status="rejected")
+        self.message_user(request, f"Отклонено: {n}.")
+
+    def save_related(self, request, form, formsets, change):
+        # После сохранения: фото, отмеченные «в карточку», копируем в фото растения
+        # (media.plant_photos, source_type="review"), если ещё не скопированы.
+        super().save_related(request, form, formsets, change)
+        review = form.instance
+        for ph in review.photos.filter(selected_for_card=True):
+            already = PlantPhoto.objects.filter(
+                plant_id=review.plant_id, storage_key=ph.storage_key
+            ).exists()
+            if not already:
+                PlantPhoto.objects.create(
+                    plant_id=review.plant_id,
+                    storage_key=ph.storage_key,
+                    public_url=ph.public_url,
+                    preview_url=ph.preview_url,
+                    source_type="review",
+                )

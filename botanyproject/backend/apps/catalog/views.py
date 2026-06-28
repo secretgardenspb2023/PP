@@ -5,17 +5,20 @@ from urllib.parse import urlencode
 from django.core.cache import cache
 from django.db.models import Prefetch, Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import imgproxy, media
 from . import models as m
 from . import search as es
 from .filters import (
     DIMENSIONS, RANGES, SORTS, apply_filters, facet_counts, histograms,
 )
-from .serializers import PlantDetailSerializer, PlantListSerializer
+from .serializers import PlantDetailSerializer, PlantListSerializer, ReviewSerializer
 
 SEARCH_PAGE_SIZE = 24
 
@@ -242,4 +245,50 @@ class SuggestView(APIView):
                  "name": p.name_rus or p.lat_name_unique}
                 for p in qs
             ]
+        )
+
+
+class ReviewListCreateView(APIView):
+    """Отзывы к растению (ТЗ §11 Фаза 2). GET — одобренные отзывы; POST — создать
+    (нужна авторизация), текст + до 5 фото, статус «на модерации»."""
+
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    parser_classes = [MultiPartParser, FormParser]
+    MAX_PHOTOS = 5
+
+    def get(self, request, plant_id):
+        qs = (
+            m.Review.objects.filter(plant_id=plant_id, status="approved")
+            .prefetch_related("photos")
+        )
+        return Response({"count": qs.count(), "results": ReviewSerializer(qs, many=True).data})
+
+    def post(self, request, plant_id):
+        if not m.Plant.objects.filter(id_plant=plant_id).exists():
+            return Response({"detail": "Растение не найдено."}, status=status.HTTP_404_NOT_FOUND)
+        text = (request.data.get("text") or "").strip()
+        if len(text) < 3:
+            return Response({"text": ["Напишите текст отзыва."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = m.Review.objects.create(
+            plant_id=plant_id,
+            user=request.user,
+            author_name=(getattr(request.user, "full_name", "") or request.user.email or "Пользователь"),
+            text=text[:5000],
+            status="pending",
+        )
+        errors = []
+        for f in request.FILES.getlist("photos")[: self.MAX_PHOTOS]:
+            try:
+                key = media.upload_image(f.read(), f.content_type, prefix="reviews")
+                m.ReviewPhoto.objects.create(
+                    review=review, storage_key=key,
+                    public_url=imgproxy.full(key), preview_url=imgproxy.thumb(key),
+                )
+            except ValueError as exc:
+                errors.append(str(exc))
+        return Response(
+            {"detail": "Спасибо! Отзыв отправлен на модерацию.", "id": review.id,
+             "photo_errors": errors},
+            status=status.HTTP_201_CREATED,
         )

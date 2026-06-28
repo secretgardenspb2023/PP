@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPlant, type PlantDetail } from "@/lib/api";
 import { Reveal } from "@/components/Reveal";
+import { PlantReviews } from "@/components/PlantReviews";
 
 // Описание приходит уже санитайзенным HTML с бэкенда (bleach) — рендерим как разметку.
 function RichText({ html, className = "" }: { html: string; className?: string }) {
@@ -264,6 +265,10 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
               </section>
             </Reveal>
           )}
+
+          <Reveal>
+            <PlantReviews plantId={plant.id_plant} />
+          </Reveal>
         </div>
       </div>
     </div>

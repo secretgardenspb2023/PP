@@ -208,3 +208,18 @@ class PlantDetailSerializer(serializers.ModelSerializer):
 
     def get_photos(self, obj):
         return PlantPhotoSerializer(obj.photos.all(), many=True).data
+
+
+class ReviewPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = m.ReviewPhoto
+        fields = ["id", "public_url", "preview_url"]
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    photos = ReviewPhotoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = m.Review
+        fields = ["id", "author_name", "text", "rating", "created_at", "photos"]
+        read_only_fields = fields

@@ -53,6 +53,10 @@ INDEX_BODY = {
             "name_rus": {"type": "text", "analyzer": "ru"},
             # Каноническое отображаемое имя карточки (заполнено для всех, включает сорт).
             "rus_name_unique": {"type": "text", "analyzer": "ru"},
+            # Объединённое поле всех названий (рус. транскрипция + латынь + синонимы) в
+            # ОДНОМ поле — чтобы смешанный запрос «клематис ma» (кириллич. род + латинский
+            # префикс сорта) совпал: «клематис» из рус. части, «ma»-префикс из «Mazury».
+            "names_all": {"type": "text", "analyzer": "ru"},
             # Canonical Russian binomial assembled from taxonomy (genus + species
             # rus_name) — populated even when plants.name_rus is blank (~11%).
             "name_rus_full": {"type": "text", "analyzer": "ru"},
@@ -82,6 +86,9 @@ SEARCH_FIELDS = [
     "rus_name_unique^5", "name_rus^5", "name_rus_full^5", "synonyms^4", "lat_name^3",
     "genus^2", "genus_rus^2", "species_rus^2", "family^2",
     "species",
+    # Кросс-язычная подстраховка (рус.+лат. в одном поле) — низкий вес, чтобы не
+    # перебивать ранжирование по специфичным полям, но ловить смешанные запросы.
+    "names_all",
 ]
 
 
@@ -102,7 +109,7 @@ def fix_typos(query):
 
 
 # Поля для префиксного поиска по частичному последнему слову (только названия).
-PREFIX_FIELDS = ["rus_name_unique^5", "name_rus_full^5", "name_rus^4", "lat_name^3"]
+PREFIX_FIELDS = ["rus_name_unique^5", "name_rus_full^5", "name_rus^4", "lat_name^3", "names_all^2"]
 
 
 def _match_query(query):
@@ -171,6 +178,7 @@ def build_document(plant):
         "name_rus": name_rus,
         "rus_name_unique": rus_name_unique,
         "name_rus_full": name_rus_full,
+        "names_all": " ".join(filter(None, [rus_name_unique, name_rus, name_rus_full, lat_name, *synonyms])),
         "lat_name": lat_name,
         "species": species.name,
         "species_rus": species_rus,

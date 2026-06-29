@@ -2,8 +2,11 @@
 
 Read-oriented registration so the imported client data is browsable in /admin/.
 """
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
+from django.utils import timezone
 
+from . import imgproxy, media
 from .models import (
     Color,
     DictCareLevel,
@@ -30,8 +33,44 @@ from .models import (
 from django.utils.html import format_html
 
 
+class PlantPhotoInline(admin.TabularInline):
+    """Текущие фото карточки: превью + удаление. Добавление — через поле
+    «Загрузить фото» в форме карточки (нужна загрузка файла в S3)."""
+
+    model = PlantPhoto
+    extra = 0
+    fields = ("preview", "is_main", "source_type", "public_url")
+    readonly_fields = ("preview", "source_type", "public_url")
+    verbose_name = "фото"
+    verbose_name_plural = "Текущие фото (можно удалять)"
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description="превью")
+    def preview(self, obj):
+        url = obj.preview_url or obj.public_url
+        return format_html('<img src="{}" style="height:64px;border-radius:6px">', url) if url else "—"
+
+
+class PlantAdminForm(forms.ModelForm):
+    upload_photo = forms.ImageField(
+        required=False, label="Загрузить фото",
+        help_text="Выберите файл изображения (JPG/PNG/WebP, до 8 МБ) — он добавится в карточку при сохранении.",
+    )
+    photo_is_main = forms.BooleanField(
+        required=False, initial=True, label="Сделать загруженное фото главным",
+    )
+
+    class Meta:
+        model = Plant
+        fields = "__all__"
+
+
 @admin.register(Plant)
 class PlantAdmin(admin.ModelAdmin):
+    form = PlantAdminForm
+    inlines = [PlantPhotoInline]
     list_display = ("id_plant", "lat_name_unique", "name_rus", "species", "usda_zone",
                     "is_template", "has_author_description")
     list_filter = ("is_template", "has_author_description", "is_ishs_registered", "usda_zone")
@@ -45,6 +84,27 @@ class PlantAdmin(admin.ModelAdmin):
         # Индивидуальное добавление карточки редактором — «авторское описание»
         # по умолчанию включено (ТЗ №5: защита от будущей массовой перезаписи).
         return {"has_author_description": True}
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        f = form.cleaned_data.get("upload_photo")
+        if not f:
+            return
+        try:
+            key = media.upload_image(f.read(), f.content_type, prefix=f"plants/{obj.pk}")
+        except ValueError as exc:
+            self.message_user(request, f"Фото не загружено: {exc}", level=messages.ERROR)
+            return
+        make_main = bool(form.cleaned_data.get("photo_is_main"))
+        is_main = make_main or not PlantPhoto.objects.filter(plant_id=obj.pk).exists()
+        if is_main:
+            PlantPhoto.objects.filter(plant_id=obj.pk).update(is_main=False)
+        PlantPhoto.objects.create(
+            plant_id=obj.pk, storage_key=key,
+            public_url=imgproxy.full(key), preview_url=imgproxy.thumb(key),
+            source_type="admin", is_main=is_main, created_at=timezone.now(),
+        )
+        self.message_user(request, "Фото загружено в карточку.")
 
     @admin.action(description="Переопределить шаблон вида (сделать выбранную карточку шаблоном)")
     def make_template(self, request, queryset):

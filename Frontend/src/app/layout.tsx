@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { YandexMetrika } from "@/components/YandexMetrika";
+import { CookieConsent } from "@/components/CookieConsent";
 
 // Headings (Figma: Rubik 700). Body (Figma: Noto Sans 400/500/600).
 // cyrillic subset is required — the catalog is Russian.
@@ -43,6 +44,7 @@ export default function RootLayout({
           <Footer />
         </AuthProvider>
         <YandexMetrika />
+        <CookieConsent />
       </body>
     </html>
   );

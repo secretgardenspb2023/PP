@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CookieSettingsLink } from "@/components/CookieSettingsLink";
 
 export function Footer() {
   return (
@@ -9,6 +10,8 @@ export function Footer() {
           <Link href="/catalog" className="hover:text-brand">Каталог</Link>
           <Link href="/about" className="hover:text-brand">О проекте</Link>
           <Link href="/contacts" className="hover:text-brand">Контакты</Link>
+          <Link href="/privacy" className="hover:text-brand">Политика cookie</Link>
+          <CookieSettingsLink />
         </nav>
       </div>
     </footer>

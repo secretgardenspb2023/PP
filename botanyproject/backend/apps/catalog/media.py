@@ -4,10 +4,18 @@
 подписанные imgproxy-URL (full для просмотра, thumb для превью). Используется
 вьюхой создания отзыва.
 """
+import os
+import urllib.request
 import uuid
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import boto3
 from django.conf import settings
+
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+_EXT_CT = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+           ".webp": "image/webp", ".gif": "image/gif"}
 
 ALLOWED_CT = {
     "image/jpeg": ".jpg",
@@ -40,3 +48,26 @@ def upload_image(data: bytes, content_type: str, *, prefix: str = "reviews") -> 
         Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key, Body=data, ContentType=content_type
     )
     return key
+
+
+def download_image(url: str, *, timeout: int = 30) -> tuple[bytes, str]:
+    """Скачать картинку по URL → (bytes, content_type). ValueError при ошибке.
+    Тип/размер потом валидирует upload_image."""
+    url = (url or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("нужна полная ссылка вида https://…")
+    try:  # percent-кодируем не-ASCII путь (кириллич. имена файлов)
+        url.encode("ascii")
+    except UnicodeEncodeError:
+        p = urlsplit(url)
+        url = urlunsplit((p.scheme, p.netloc, quote(p.path), quote(p.query, safe="=&"), p.fragment))
+    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "*/*"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310
+            data = r.read()
+            ct = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"не удалось скачать ({type(exc).__name__})") from exc
+    if ct not in ALLOWED_CT:  # тип не пришёл/неверный — определяем по расширению
+        ct = _EXT_CT.get(os.path.splitext(urlsplit(url).path)[1].lower(), ct)
+    return data, ct

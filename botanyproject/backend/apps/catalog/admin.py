@@ -61,6 +61,10 @@ class PlantAdminForm(forms.ModelForm):
         widget=forms.ClearableFileInput(attrs={"accept": "image/*"}),
         help_text="Выберите файл изображения (JPG/PNG/WebP, до 8 МБ) — он добавится в карточку при сохранении.",
     )
+    photo_url = forms.URLField(
+        required=False, label="…или фото по ссылке (URL)", assume_scheme="https",
+        help_text="Вставьте прямую ссылку на изображение — оно будет скачано и добавлено в карточку.",
+    )
     photo_is_main = forms.BooleanField(
         required=False, initial=True, label="Сделать загруженное фото главным",
     )
@@ -88,17 +92,13 @@ class PlantAdmin(admin.ModelAdmin):
         # по умолчанию включено (ТЗ №5: защита от будущей массовой перезаписи).
         return {"has_author_description": True}
 
-    def save_model(self, request, obj, form, change):
-        super().save_model(request, obj, form, change)
-        f = form.cleaned_data.get("upload_photo")
-        if not f:
-            return
+    def _attach_photo(self, request, obj, data, content_type, make_main):
+        """Залить байты в S3 + создать PlantPhoto. Возвращает True при успехе."""
         try:
-            key = media.upload_image(f.read(), f.content_type, prefix=f"plants/{obj.pk}")
+            key = media.upload_image(data, content_type, prefix=f"plants/{obj.pk}")
         except ValueError as exc:
             self.message_user(request, f"Фото не загружено: {exc}", level=messages.ERROR)
-            return
-        make_main = bool(form.cleaned_data.get("photo_is_main"))
+            return False
         is_main = make_main or not PlantPhoto.objects.filter(plant_id=obj.pk).exists()
         if is_main:
             PlantPhoto.objects.filter(plant_id=obj.pk).update(is_main=False)
@@ -107,7 +107,28 @@ class PlantAdmin(admin.ModelAdmin):
             public_url=imgproxy.full(key), preview_url=imgproxy.thumb(key),
             source_type="admin", is_main=is_main, created_at=timezone.now(),
         )
-        self.message_user(request, "Фото загружено в карточку.")
+        return True
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        make_main = bool(form.cleaned_data.get("photo_is_main"))
+        added = 0
+        # 1) файл
+        f = form.cleaned_data.get("upload_photo")
+        if f and self._attach_photo(request, obj, f.read(), f.content_type, make_main and added == 0):
+            added += 1
+        # 2) по ссылке
+        url = (form.cleaned_data.get("photo_url") or "").strip()
+        if url:
+            try:
+                data, content_type = media.download_image(url)
+            except ValueError as exc:
+                self.message_user(request, f"Фото по ссылке не загружено: {exc}", level=messages.ERROR)
+            else:
+                if self._attach_photo(request, obj, data, content_type, make_main and added == 0):
+                    added += 1
+        if added:
+            self.message_user(request, f"Добавлено фото: {added}.")
 
     @admin.action(description="Переопределить шаблон вида (сделать выбранную карточку шаблоном)")
     def make_template(self, request, queryset):

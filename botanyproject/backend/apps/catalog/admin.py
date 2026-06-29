@@ -24,13 +24,107 @@ from .models import (
     Genus,
     Month,
     Plant,
+    PlantCare,
+    PlantCareLevel,
+    PlantDesign,
+    PlantDesigner,
+    PlantDesignUse,
+    PlantDescription,
+    PlantFloweringMonth,
+    PlantFlowerColor,
+    PlantFlowerForm,
+    PlantFruitingMonth,
+    PlantFruitUse,
+    PlantGardenStyle,
+    PlantHabitForm,
+    PlantLeafColor,
+    PlantLeafShape,
     PlantPhoto,
+    PlantPropagation,
+    PlantSoilAcidity,
+    PlantSunType,
     PlantSynonym,
+    PlantVegetationPeriod,
+    PlantVisual,
     Review,
     ReviewPhoto,
     Species,
 )
 from django.utils.html import format_html
+
+
+# --------------------------------------------------------------------------- #
+#  Полное редактирование карточки (ТЗ Этап 7): описания, параметры, характеристики
+# --------------------------------------------------------------------------- #
+class PlantDescriptionInline(admin.StackedInline):
+    model = PlantDescription
+    extra = 1
+    max_num = 1
+    can_delete = False
+    verbose_name_plural = "Описания (можно использовать HTML: <b>, списки, ссылки)"
+    fields = ["content_text", "interesting_facts", "requirements",
+              "problems", "diseases_pests", "propagation", "usage_info"]
+
+
+class PlantVisualInline(admin.StackedInline):
+    model = PlantVisual
+    extra = 1
+    max_num = 1
+    can_delete = False
+    verbose_name_plural = "Параметры: размеры и вид"
+    fields = ["height_max_cm", "diameter_max_cm", "annual_growth_cm",
+              "is_thorny", "flowering_duration", "flower_form"]
+
+
+class PlantCareInline(admin.StackedInline):
+    model = PlantCare
+    extra = 1
+    max_num = 1
+    can_delete = False
+    verbose_name_plural = "Параметры: уход (признаки)"
+    fields = ["soil_demanding", "care_city", "care_disease_resistant",
+              "care_pest_resistant", "care_no_shelter_boolean",
+              "care_no_digging_boolean", "care_no_watering_boolean"]
+
+
+class PlantDesignInline(admin.StackedInline):
+    model = PlantDesign
+    extra = 1
+    max_num = 1
+    can_delete = False
+    verbose_name_plural = "Параметры: дизайн (признаки)"
+    fields = ["is_toxic", "has_aroma", "is_self_fertile", "is_allergen",
+              "has_decorative_bark", "has_decorative_fruit"]
+
+
+def _char_inline(model_cls, label):
+    """Фабрика инлайна для нормализованной характеристики (линк-таблица)."""
+    return type(
+        f"{model_cls.__name__}Inline",
+        (admin.TabularInline,),
+        {"model": model_cls, "extra": 1, "fields": ["value"],
+         "verbose_name": label, "verbose_name_plural": f"Характеристика: {label}"},
+    )
+
+
+_CHAR_INLINES = [
+    _char_inline(PlantHabitForm, "Форма роста"),
+    _char_inline(PlantLeafShape, "Форма листа"),
+    _char_inline(PlantFlowerForm, "Форма цветка"),
+    _char_inline(PlantFlowerColor, "Цвет цветка"),
+    _char_inline(PlantLeafColor, "Цвет листвы"),
+    _char_inline(PlantVegetationPeriod, "Период вегетации"),
+    _char_inline(PlantFloweringMonth, "Месяцы цветения"),
+    _char_inline(PlantFruitingMonth, "Месяцы плодоношения"),
+    _char_inline(PlantSunType, "Освещение"),
+    _char_inline(PlantSoilAcidity, "Кислотность почвы"),
+    _char_inline(PlantCareLevel, "Уровень ухода"),
+    _char_inline(PlantPropagation, "Размножение"),
+    _char_inline(PlantDesignUse, "Использование в дизайне"),
+    _char_inline(PlantGardenStyle, "Стили сада"),
+    _char_inline(PlantDesigner, "Селекционер"),
+    _char_inline(PlantFruitUse, "Использование плодов"),
+]
 
 
 class PlantPhotoInline(admin.TabularInline):
@@ -77,7 +171,10 @@ class PlantAdminForm(forms.ModelForm):
 @admin.register(Plant)
 class PlantAdmin(admin.ModelAdmin):
     form = PlantAdminForm
-    inlines = [PlantPhotoInline]
+    inlines = [
+        PlantDescriptionInline, PlantVisualInline, PlantCareInline, PlantDesignInline,
+        *_CHAR_INLINES, PlantPhotoInline,
+    ]
     list_display = ("id_plant", "lat_name_unique", "name_rus", "species", "usda_zone",
                     "is_template", "has_author_description")
     list_filter = ("is_template", "has_author_description", "is_ishs_registered", "usda_zone")

@@ -54,8 +54,11 @@ class PlantPhotoInline(admin.TabularInline):
 
 
 class PlantAdminForm(forms.ModelForm):
-    upload_photo = forms.ImageField(
+    # FileField (не ImageField) — ImageField требует Pillow для валидации, которого нет
+    # в контейнере; тип файла всё равно проверяет media.upload_image (только изображения).
+    upload_photo = forms.FileField(
         required=False, label="Загрузить фото",
+        widget=forms.ClearableFileInput(attrs={"accept": "image/*"}),
         help_text="Выберите файл изображения (JPG/PNG/WebP, до 8 МБ) — он добавится в карточку при сохранении.",
     )
     photo_is_main = forms.BooleanField(

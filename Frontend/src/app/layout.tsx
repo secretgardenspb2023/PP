@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { YandexMetrika } from "@/components/YandexMetrika";
 
 // Headings (Figma: Rubik 700). Body (Figma: Noto Sans 400/500/600).
 // cyrillic subset is required — the catalog is Russian.
@@ -41,6 +42,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Footer />
         </AuthProvider>
+        <YandexMetrika />
       </body>
     </html>
   );

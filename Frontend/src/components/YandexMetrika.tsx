@@ -34,18 +34,24 @@ function MetrikaTracker() {
   return null;
 }
 
-// Метрика грузится ТОЛЬКО после согласия на cookie (152-ФЗ): ждём granted в
-// localStorage либо событие от баннера согласия в текущей сессии.
+// Информационная модель согласия (стандарт рунета): Метрика грузится сразу,
+// кроме случая явного «Отклонить» (cookie-consent=denied). Это даёт корректную
+// «Проверку счётчика» у Яндекса и учёт всех визитов; отказ — отключает аналитику.
 export function YandexMetrika() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem("cookie-consent") === "granted") {
+    if (localStorage.getItem("cookie-consent") !== "denied") {
       setEnabled(true);
     }
     const grant = () => setEnabled(true);
+    const deny = () => setEnabled(false);
     window.addEventListener("cookie-consent-granted", grant);
-    return () => window.removeEventListener("cookie-consent-granted", grant);
+    window.addEventListener("cookie-consent-denied", deny);
+    return () => {
+      window.removeEventListener("cookie-consent-granted", grant);
+      window.removeEventListener("cookie-consent-denied", deny);
+    };
   }, []);
 
   if (!enabled) return null;

@@ -22,9 +22,9 @@ export function CookieConsent() {
 
   function decide(value: "granted" | "denied") {
     localStorage.setItem(KEY, value);
-    if (value === "granted") {
-      window.dispatchEvent(new Event("cookie-consent-granted"));
-    }
+    window.dispatchEvent(
+      new Event(value === "granted" ? "cookie-consent-granted" : "cookie-consent-denied"),
+    );
     setShow(false);
   }
 
@@ -35,8 +35,9 @@ export function CookieConsent() {
       <div className="container-page flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-3xl text-[14px] leading-relaxed text-accent-ink">
           Мы используем файлы cookie и сервис Яндекс.Метрика, чтобы анализировать
-          посещаемость и улучшать сайт. Нажимая «Принять», вы соглашаетесь на их
-          использование. Подробнее — в{" "}
+          посещаемость и улучшать сайт. Продолжая пользоваться сайтом, вы соглашаетесь
+          с их использованием. Вы можете отказаться — тогда аналитика отключится.
+          Подробнее — в{" "}
           <Link href="/privacy" className="font-medium text-brand hover:text-brand-dark">
             Политике использования cookie
           </Link>

@@ -52,8 +52,16 @@ def _get(url, timeout=30):
 
 
 def _extract(html):
-    """Ссылки на фото карточки: слайдер Directorist, иначе og:image."""
+    """Ссылки на фото карточки: ВСЯ галерея слайдера Directorist, иначе og:image.
+
+    Галерея лежит в `<span class='plasmaSliderImageItem' data-src='...'>` (несколько
+    кадров). Берём их все по порядку — цикл загрузки пропустит битые (404) и возьмёт
+    живой кадр. Раньше читали только одну превью-картинку `plasmaSliderTempImg`, и если
+    она оказывалась битой — карточка ошибочно считалась «без фото».
+    """
     imgs = []
+    for m in re.finditer(r"plasmaSliderImageItem[^>]*?data-src=['\"]([^'\"]+)['\"]", html, re.I):
+        imgs.append(m.group(1))
     for m in re.finditer(r"<img[^>]*plasmaSliderTempImg[^>]*>", html, re.I):
         s = re.search(r"src=['\"]([^'\"]+)['\"]", m.group(0))
         if s:

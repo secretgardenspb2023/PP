@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useRef, useState } from "react";
 import { register } from "@/lib/auth";
 import { SmartCaptcha, type CaptchaHandle } from "@/components/auth/SmartCaptcha";
 
-export default function RegisterPage() {
+function RegisterInner() {
   const router = useRouter();
+  // Куда вернуть после подтверждения email — на страницу, с которой пришёл пользователь.
+  const next = useSearchParams().get("next") || "/";
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,8 +24,11 @@ export default function RegisterPage() {
     try {
       const captchaToken = (await captchaRef.current?.execute()) ?? "";
       await register(email, fullName, password, captchaToken);
-      // Письмо с кодом ушло — отправляем пользователя на экран ввода кода.
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      // Письмо с кодом ушло — на экран ввода кода (подтверждение email обязательно).
+      // Адрес возврата (next) проносим дальше, чтобы вернуть туда после подтверждения.
+      router.push(
+        `/verify-email?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось зарегистрироваться");
       setBusy(false);
@@ -89,11 +94,22 @@ export default function RegisterPage() {
 
         <p className="mt-4 text-center text-[15px] text-muted">
           Уже есть аккаунт?{" "}
-          <Link href="/login" className="font-medium text-brand hover:text-brand-dark">
+          <Link
+            href={`/login?next=${encodeURIComponent(next)}`}
+            className="font-medium text-brand hover:text-brand-dark"
+          >
             Вход
           </Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="container-page py-16 text-center text-muted">Загрузка…</div>}>
+      <RegisterInner />
+    </Suspense>
   );
 }

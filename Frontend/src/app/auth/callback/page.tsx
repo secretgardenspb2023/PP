@@ -12,9 +12,19 @@ function CallbackInner() {
   const error = sp.get("error");
 
   // The backend set the refresh cookie before redirecting here; AuthProvider
-  // restores the session on mount. Once we have the user → go to profile.
+  // restores the session on mount. Once we have the user → возвращаем на страницу,
+  // с которой начинали вход (сохранена в sessionStorage перед соц-входом).
   useEffect(() => {
-    if (!error && !loading && user) router.replace("/profile");
+    if (!error && !loading && user) {
+      let dest = "/";
+      try {
+        dest = sessionStorage.getItem("auth_next") || "/";
+        sessionStorage.removeItem("auth_next");
+      } catch {
+        /* sessionStorage недоступен — уходим на главную */
+      }
+      router.replace(dest);
+    }
   }, [error, loading, user, router]);
 
   if (error) {

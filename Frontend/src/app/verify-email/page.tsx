@@ -6,7 +6,10 @@ import { resendCode, verifyEmail } from "@/lib/auth";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 function VerifyInner() {
-  const emailFromLink = useSearchParams().get("email") ?? "";
+  const sp = useSearchParams();
+  const emailFromLink = sp.get("email") ?? "";
+  // Куда вести после подтверждения — на страницу, с которой пользователь начинал.
+  const next = sp.get("next") || "/";
   const router = useRouter();
   const { applySession } = useAuth();
   const [email, setEmail] = useState(emailFromLink);
@@ -22,10 +25,11 @@ function VerifyInner() {
     try {
       const { access, user } = await verifyEmail(email, code.trim());
       // Email подтверждён — бэкенд уже выставил refresh-cookie и вернул токен.
-      // Заводим сессию и сразу ведём в личный кабинет, без повторного входа.
+      // Заводим сессию и сразу ведём пользователя дальше, БЕЗ повторного входа
+      // (возврат на исходную страницу, иначе — на главную).
       applySession(access, user);
       setState("ok");
-      router.replace("/profile");
+      router.replace(next);
     } catch (err) {
       setState("err");
       setMsg(err instanceof Error ? err.message : "Не удалось подтвердить email.");

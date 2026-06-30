@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+
+// Не предлагаем вернуться на сами страницы авторизации — для них next = главная.
+const AUTH_PATHS = ["/login", "/register", "/verify-email", "/auth", "/reset-password", "/forgot-password"];
 
 export function HeaderAuth() {
   const { user, loading, signOut } = useAuth();
+  const pathname = usePathname();
+  const back = AUTH_PATHS.some((p) => pathname.startsWith(p)) ? "/" : pathname || "/";
+  const nextQ = `?next=${encodeURIComponent(back)}`;
 
   if (loading) {
     return <div className="ml-auto h-9 w-32 animate-pulse rounded-control bg-surface" />;
@@ -34,13 +41,13 @@ export function HeaderAuth() {
   return (
     <div className="ml-auto flex shrink-0 items-center gap-2">
       <Link
-        href="/login"
+        href={`/login${nextQ}`}
         className="rounded-control px-4 py-2 text-[16px] font-medium text-brand-dark transition-colors hover:bg-surface"
       >
         Вход
       </Link>
       <Link
-        href="/register"
+        href={`/register${nextQ}`}
         className="rounded-control bg-brand px-4 py-2 text-[16px] font-medium text-white transition-colors hover:bg-brand-light hover:text-brand-dark"
       >
         Регистрация

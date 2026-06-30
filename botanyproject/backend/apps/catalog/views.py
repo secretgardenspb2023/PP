@@ -282,12 +282,14 @@ class ReviewListCreateView(APIView):
         if len(text) < 3:
             return Response({"text": ["Напишите текст отзыва."]}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Отзыв администратора публикуется сразу, без модерации (ТЗ-доработка).
+        is_admin = bool(request.user.is_staff or request.user.is_superuser)
         review = m.Review.objects.create(
             plant_id=plant_id,
             user=request.user,
             author_name=(getattr(request.user, "full_name", "") or request.user.email or "Пользователь"),
             text=text[:5000],
-            status="pending",
+            status="approved" if is_admin else "pending",
         )
         errors = []
         for f in request.FILES.getlist("photos")[: self.MAX_PHOTOS]:
@@ -299,8 +301,12 @@ class ReviewListCreateView(APIView):
                 )
             except ValueError as exc:
                 errors.append(str(exc))
+        detail = (
+            "Отзыв опубликован." if is_admin
+            else "Спасибо! Отзыв отправлен на модерацию."
+        )
         return Response(
-            {"detail": "Спасибо! Отзыв отправлен на модерацию.", "id": review.id,
+            {"detail": detail, "id": review.id, "status": review.status,
              "photo_errors": errors},
             status=status.HTTP_201_CREATED,
         )

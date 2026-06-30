@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -8,6 +9,7 @@ import { createReview, getReviews, type Review } from "@/lib/api";
 
 export function PlantReviews({ plantId }: { plantId: number }) {
   const { user, token } = useAuth();
+  const pathname = usePathname();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [count, setCount] = useState(0);
   const [text, setText] = useState("");
@@ -106,7 +108,7 @@ export function PlantReviews({ plantId }: { plantId: number }) {
       <div className="mt-6 border-t border-line pt-5">
         {!user ? (
           <p className="text-[15px] text-muted">
-            <Link href="/login" className="font-medium text-brand hover:text-brand-dark">Войдите</Link>
+            <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="font-medium text-brand hover:text-brand-dark">Войдите</Link>
             , чтобы оставить отзыв.
           </p>
         ) : msg ? (

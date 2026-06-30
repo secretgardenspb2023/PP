@@ -9,7 +9,7 @@ export default function ProfilePage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
+    if (!loading && !user) router.replace("/login?next=/profile");
   }, [loading, user, router]);
 
   if (loading || !user) {

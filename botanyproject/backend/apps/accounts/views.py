@@ -7,6 +7,7 @@ and logout. OAuth (Google/VK/Telegram) and 2FA are added later.
 import base64
 import binascii
 import time
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -66,11 +67,26 @@ def _login_captcha_required(email):
         return False
 
 
-def _set_refresh_cookie(response, refresh):
+def _refresh_days(user):
+    """Срок жизни refresh-токена в днях по роли: сотрудники/админы — короткий
+    (settings.REFRESH_LIFETIME_DAYS_ADMIN, по умолч. 7), обычные пользователи —
+    длинный (REFRESH_LIFETIME_DAYS_USER, 365) — с ротацией это фактически «без
+    авто-разлогина», пока человек заходит хотя бы раз в этот срок."""
+    is_admin = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+    return settings.REFRESH_LIFETIME_DAYS_ADMIN if is_admin else settings.REFRESH_LIFETIME_DAYS_USER
+
+
+def _refresh_for(user):
+    refresh = RefreshToken.for_user(user)
+    refresh.set_exp(lifetime=timedelta(days=_refresh_days(user)))
+    return refresh
+
+
+def _set_refresh_cookie(response, refresh, user):
     response.set_cookie(
         settings.AUTH_REFRESH_COOKIE,
         str(refresh),
-        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+        max_age=int(timedelta(days=_refresh_days(user)).total_seconds()),
         httponly=True,
         secure=settings.AUTH_REFRESH_COOKIE_SECURE,
         samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
@@ -79,12 +95,12 @@ def _set_refresh_cookie(response, refresh):
 
 
 def _tokens_response(user, body_extra=None, code=status.HTTP_200_OK):
-    refresh = RefreshToken.for_user(user)
+    refresh = _refresh_for(user)
     body = {"access": str(refresh.access_token)}
     if body_extra:
         body.update(body_extra)
     response = Response(body, status=code)
-    _set_refresh_cookie(response, refresh)
+    _set_refresh_cookie(response, refresh, user)
     return response
 
 
@@ -540,7 +556,7 @@ class GoogleCallbackView(APIView):
         )
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_GOOGLE)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
-        _set_refresh_cookie(response, RefreshToken.for_user(user))
+        _set_refresh_cookie(response, _refresh_for(user), user)
         return response
 
 
@@ -590,7 +606,7 @@ class TelegramCallbackView(APIView):
         user = oauth.get_or_create_social(PROVIDER_TELEGRAM, data["id"], name=name, avatar=data.get("photo_url"))
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_TELEGRAM)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
-        _set_refresh_cookie(response, RefreshToken.for_user(user))
+        _set_refresh_cookie(response, _refresh_for(user), user)
         return response
 
 
@@ -638,5 +654,5 @@ class VKCallbackView(APIView):
         )
         audit.log_event("oauth_login", request=request, user=user, provider=PROVIDER_VK)
         response = redirect(f"{settings.FRONTEND_URL}/auth/callback?status=ok")
-        _set_refresh_cookie(response, RefreshToken.for_user(user))
+        _set_refresh_cookie(response, _refresh_for(user), user)
         return response

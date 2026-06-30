@@ -1,16 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { TelegramLogin } from "@/components/auth/TelegramLogin";
 import { SmartCaptcha, type CaptchaHandle } from "@/components/auth/SmartCaptcha";
 import { googleLoginUrl, vkLoginUrl } from "@/lib/auth";
 
-export default function LoginPage() {
+function LoginInner() {
   const router = useRouter();
   const { signIn } = useAuth();
+  // Куда вернуть после входа — на страницу, с которой пришёл пользователь.
+  const next = useSearchParams().get("next") || "/";
+  // Соц-вход уходит на провайдера и возвращается на /auth/callback — адрес возврата
+  // не переживёт редирект в URL, поэтому кладём его в sessionStorage (тот же таб).
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("auth_next", next);
+    } catch {
+      /* sessionStorage может быть недоступен — не критично */
+    }
+  }, [next]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +38,7 @@ export default function LoginPage() {
     try {
       const captchaToken = captchaRequired ? ((await captchaRef.current?.execute()) ?? "") : undefined;
       await signIn(email, password, captchaToken);
-      router.push("/profile");
+      router.push(next);
     } catch (err) {
       const data = (err as { data?: { captcha_required?: boolean } }).data;
       if (data?.captcha_required) setCaptchaRequired(true);
@@ -111,12 +122,23 @@ export default function LoginPage() {
 
         <p className="mt-4 text-center text-[15px] text-muted">
           Нет аккаунта?{" "}
-          <Link href="/register" className="font-medium text-brand hover:text-brand-dark">
+          <Link
+            href={`/register?next=${encodeURIComponent(next)}`}
+            className="font-medium text-brand hover:text-brand-dark"
+          >
             Регистрация
           </Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="container-page py-16 text-center text-muted">Загрузка…</div>}>
+      <LoginInner />
+    </Suspense>
   );
 }
 

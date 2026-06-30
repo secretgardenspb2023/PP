@@ -149,6 +149,11 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+# Срок жизни refresh-токена по роли (доработка): обычный пользователь — длинный
+# срок (с ротацией = фактически без авто-разлогина, пока заходит), сотрудники/
+# администраторы — короткий (безопасность). См. apps.accounts.views._refresh_days.
+REFRESH_LIFETIME_DAYS_USER = env.int("REFRESH_LIFETIME_DAYS_USER", default=365)
+REFRESH_LIFETIME_DAYS_ADMIN = env.int("REFRESH_LIFETIME_DAYS_ADMIN", default=7)
 # Refresh token lives in an HttpOnly cookie scoped to the auth endpoints.
 AUTH_REFRESH_COOKIE = "refresh_token"
 AUTH_REFRESH_COOKIE_PATH = "/api/v1/auth/"

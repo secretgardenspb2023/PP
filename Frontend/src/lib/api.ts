@@ -56,6 +56,7 @@ export type PlantDetail = {
   variety: string | null;
   rus_name_unique: string | null;
   usda_zone: number | null;
+  category: { value: string; label: string } | null;
   is_template: boolean;
   is_ishs_registered: boolean;
   created_at: string;

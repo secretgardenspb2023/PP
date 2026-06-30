@@ -169,6 +169,7 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
 
           <Reveal delay={80}>
             <dl className="rounded-card border border-line bg-white p-5 shadow-soft">
+              {plant.category && <Row label="Категория">{plant.category.label}</Row>}
               {plant.usda_zone != null && <Row label="Зона USDA">{plant.usda_zone}</Row>}
               {tax.family_rus && (
                 <Row label="Семейство">
@@ -188,6 +189,13 @@ export default async function PlantPage({ params }: { params: Promise<{ id: stri
           <Reveal as="header">
             <h1 className="text-[32px] font-bold leading-tight text-ink md:text-[44px]">{plant.name}</h1>
             <p className="mt-1.5 text-[18px] italic text-muted">{plant.lat_name_unique}</p>
+            {plant.category && (
+              <p className="mt-3">
+                <span className="inline-flex items-center gap-1.5 rounded-control bg-brand px-3 py-1 text-[14px] font-medium text-white">
+                  {plant.category.label}
+                </span>
+              </p>
+            )}
             {flags.length > 0 && (
               <div className="mt-5 flex flex-wrap gap-2">
                 {flags.map(([k, label]) => (

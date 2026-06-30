@@ -3,6 +3,19 @@ import bleach
 from rest_framework import serializers
 
 from . import models as m
+from .filters import CATEGORIES, CATEGORY_LABELS
+
+
+def plant_category(usda_zone):
+    """Производная категория растения по зоне зимостойкости (та же логика, что в
+    фильтрах filters.py): 1–5 — садовые, 6–8 — сезонные, 9+ — комнатные.
+    Возвращает {value, label} или None, если зона не указана."""
+    if usda_zone is None:
+        return None
+    for key, (lo, hi) in CATEGORIES.items():
+        if lo <= usda_zone <= hi:
+            return {"value": key, "label": CATEGORY_LABELS[key]}
+    return None
 
 # Безопасная разметка в описаниях (ТЗ 9.3): разрешаем базовые теги форматирования,
 # всё остальное (script, style, on*-атрибуты, js:-ссылки) bleach вырезает.
@@ -98,6 +111,7 @@ class PlantPhotoSerializer(serializers.ModelSerializer):
 
 class PlantDetailSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    category = serializers.SerializerMethodField()
     taxonomy = serializers.SerializerMethodField()
     characteristics = serializers.SerializerMethodField()
     descriptions = serializers.SerializerMethodField()
@@ -108,12 +122,17 @@ class PlantDetailSerializer(serializers.ModelSerializer):
         model = m.Plant
         fields = [
             "id_plant", "url_slug", "name", "name_rus", "lat_name_unique", "variety",
-            "rus_name_unique", "usda_zone", "is_template", "is_ishs_registered",
+            "rus_name_unique", "usda_zone", "category", "is_template", "is_ishs_registered",
             "created_at", "taxonomy", "characteristics", "descriptions", "synonyms", "photos",
         ]
 
     def get_name(self, obj):
         return display_name(obj)
+
+    def get_category(self, obj):
+        # Категория по зоне зимостойкости (садовые/сезонные/комнатные) — для вывода
+        # в карточке растения (просьба заказчицы).
+        return plant_category(obj.usda_zone)
 
     def get_taxonomy(self, obj):
         species = obj.species

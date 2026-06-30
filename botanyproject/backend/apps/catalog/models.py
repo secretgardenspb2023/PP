@@ -104,18 +104,19 @@ class Plant(models.Model):
     id_plant = models.AutoField(primary_key=True)
     species = models.ForeignKey(
         Species, db_column="species_id", on_delete=models.DO_NOTHING, related_name="plants",
+        verbose_name="вид (таксон)",
     )
     variety = models.CharField("сорт", max_length=100, null=True, blank=True)
     lat_name_unique = models.CharField("латинское название", max_length=100, null=True, blank=True)
-    url_slug = models.CharField(max_length=100, null=True, blank=True)
+    url_slug = models.CharField("адрес страницы (ЧПУ)", max_length=100, null=True, blank=True)
     name_rus = models.CharField("русское название", max_length=255, null=True, blank=True)
-    rus_name_unique = models.CharField(max_length=100, null=True, blank=True)
+    rus_name_unique = models.CharField("имя для показа (рус.)", max_length=100, null=True, blank=True)
     id_pp = models.IntegerField("ключ донорских фото", null=True, blank=True)
     usda_zone = models.IntegerField("зона USDA", null=True, blank=True)
     is_template = models.BooleanField("шаблон вида", default=False)
     has_author_description = models.BooleanField("авторское описание", default=False)
     is_ishs_registered = models.BooleanField("зарегистрирован ISHS", default=False, null=True)
-    created_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField("создано", null=True, blank=True)
 
     class Meta:
         managed = False
@@ -178,18 +179,18 @@ class PlantVisual(models.Model):
     plant = models.OneToOneField(
         Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="visual",
     )
-    height_max_cm = models.IntegerField(null=True, blank=True)
-    diameter_max_cm = models.IntegerField(null=True, blank=True)
-    annual_growth_cm = models.IntegerField(null=True, blank=True)
-    is_thorny = models.BooleanField(default=False)
-    leaf_shape = models.JSONField(null=True, blank=True)
-    flowering_duration = models.CharField(max_length=100, null=True, blank=True)
-    flower_form = models.CharField(max_length=100, null=True, blank=True)
-    vegetation_periods = models.JSONField(default=list)
-    habit_forms = models.JSONField(default=list)
-    flower_colors = models.JSONField(default=list, null=True, blank=True)
-    leaf_colors = models.JSONField(default=list, null=True, blank=True)
-    flowering_months = models.JSONField(default=list, null=True, blank=True)
+    height_max_cm = models.IntegerField("высота, макс. (см)", null=True, blank=True)
+    diameter_max_cm = models.IntegerField("диаметр, макс. (см)", null=True, blank=True)
+    annual_growth_cm = models.IntegerField("годовой прирост (см)", null=True, blank=True)
+    is_thorny = models.BooleanField("колючее", default=False)
+    leaf_shape = models.JSONField("форма листа (JSON)", null=True, blank=True)
+    flowering_duration = models.CharField("длительность цветения", max_length=100, null=True, blank=True)
+    flower_form = models.CharField("форма цветка", max_length=100, null=True, blank=True)
+    vegetation_periods = models.JSONField("периоды вегетации (JSON)", default=list)
+    habit_forms = models.JSONField("формы роста (JSON)", default=list)
+    flower_colors = models.JSONField("цвета цветка (JSON)", default=list, null=True, blank=True)
+    leaf_colors = models.JSONField("цвета листвы (JSON)", default=list, null=True, blank=True)
+    flowering_months = models.JSONField("месяцы цветения (JSON)", default=list, null=True, blank=True)
 
     class Meta:
         managed = False
@@ -205,17 +206,17 @@ class PlantCare(models.Model):
     plant = models.OneToOneField(
         Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="care",
     )
-    sun = models.JSONField(default=list, null=True, blank=True)
-    soil_acid = models.JSONField(default=list, null=True, blank=True)
-    soil_demanding = models.BooleanField(default=False, null=True)
-    propagation = models.JSONField(default=list, null=True, blank=True)
-    care_level = models.JSONField(default=list, null=True, blank=True)
-    care_city = models.BooleanField(default=False, null=True)
-    care_disease_resistant = models.BooleanField(default=False, null=True)
-    care_pest_resistant = models.BooleanField(default=False, null=True)
-    care_no_shelter_boolean = models.BooleanField(default=False, null=True)
-    care_no_digging_boolean = models.BooleanField(default=False, null=True)
-    care_no_watering_boolean = models.BooleanField(default=False, null=True)
+    sun = models.JSONField("освещение (JSON)", default=list, null=True, blank=True)
+    soil_acid = models.JSONField("кислотность почвы (JSON)", default=list, null=True, blank=True)
+    soil_demanding = models.BooleanField("требовательно к почве", default=False, null=True)
+    propagation = models.JSONField("размножение (JSON)", default=list, null=True, blank=True)
+    care_level = models.JSONField("уровень ухода (JSON)", default=list, null=True, blank=True)
+    care_city = models.BooleanField("подходит для города", default=False, null=True)
+    care_disease_resistant = models.BooleanField("устойчиво к болезням", default=False, null=True)
+    care_pest_resistant = models.BooleanField("устойчиво к вредителям", default=False, null=True)
+    care_no_shelter_boolean = models.BooleanField("без укрытия на зиму", default=False, null=True)
+    care_no_digging_boolean = models.BooleanField("без выкопки на зиму", default=False, null=True)
+    care_no_watering_boolean = models.BooleanField("без полива", default=False, null=True)
 
     class Meta:
         managed = False
@@ -231,17 +232,17 @@ class PlantDesign(models.Model):
     plant = models.OneToOneField(
         Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="design",
     )
-    design_uses = models.JSONField(default=list, null=True, blank=True)
-    garden_styles = models.JSONField(default=list, null=True, blank=True)
-    designer = models.JSONField(default=list, null=True, blank=True)
-    fruit_uses = models.JSONField(default=list, null=True, blank=True)
-    fruiting_months = models.JSONField(null=True, blank=True)
-    is_toxic = models.BooleanField(default=False, null=True)
-    has_aroma = models.BooleanField(default=False, null=True)
-    is_self_fertile = models.BooleanField(default=False, null=True)
-    is_allergen = models.BooleanField(default=False, null=True)
-    has_decorative_bark = models.BooleanField(default=False, null=True)
-    has_decorative_fruit = models.BooleanField(default=False, null=True)
+    design_uses = models.JSONField("использование в дизайне (JSON)", default=list, null=True, blank=True)
+    garden_styles = models.JSONField("стили сада (JSON)", default=list, null=True, blank=True)
+    designer = models.JSONField("селекционер (JSON)", default=list, null=True, blank=True)
+    fruit_uses = models.JSONField("использование плодов (JSON)", default=list, null=True, blank=True)
+    fruiting_months = models.JSONField("месяцы плодоношения (JSON)", null=True, blank=True)
+    is_toxic = models.BooleanField("ядовитое", default=False, null=True)
+    has_aroma = models.BooleanField("ароматное", default=False, null=True)
+    is_self_fertile = models.BooleanField("самоплодное", default=False, null=True)
+    is_allergen = models.BooleanField("аллерген", default=False, null=True)
+    has_decorative_bark = models.BooleanField("декоративная кора", default=False, null=True)
+    has_decorative_fruit = models.BooleanField("декоративные плоды", default=False, null=True)
 
     class Meta:
         managed = False
@@ -257,13 +258,13 @@ class PlantDescription(models.Model):
     plant = models.OneToOneField(
         Plant, primary_key=True, db_column="id_plant", on_delete=models.CASCADE, related_name="description",
     )
-    content_text = models.TextField(null=True, blank=True)
-    requirements = models.TextField(null=True, blank=True)
-    problems = models.TextField(null=True, blank=True)
-    diseases_pests = models.TextField(null=True, blank=True)
-    propagation = models.TextField(null=True, blank=True)
-    usage_info = models.TextField(null=True, blank=True)
-    interesting_facts = models.TextField(null=True, blank=True)
+    content_text = models.TextField("описание", null=True, blank=True)
+    requirements = models.TextField("требования", null=True, blank=True)
+    problems = models.TextField("проблемы", null=True, blank=True)
+    diseases_pests = models.TextField("болезни и вредители", null=True, blank=True)
+    propagation = models.TextField("размножение", null=True, blank=True)
+    usage_info = models.TextField("использование", null=True, blank=True)
+    interesting_facts = models.TextField("интересные факты", null=True, blank=True)
 
     class Meta:
         managed = False

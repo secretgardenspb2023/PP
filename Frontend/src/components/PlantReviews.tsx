@@ -131,9 +131,15 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               ref={fileRef}
               id="review-photos"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               multiple
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))}
+              onChange={(e) => {
+                // Лимит как на бэкенде (media.MAX_BYTES): 8 МБ на файл, до 5 фото.
+                const all = Array.from(e.target.files ?? []);
+                const ok = all.filter((f) => f.size <= 8 * 1024 * 1024);
+                setErr(ok.length < all.length ? "Файл больше 8 МБ — пропущен." : null);
+                setFiles(ok.slice(0, 5));
+              }}
               className="hidden"
             />
             <label
@@ -166,7 +172,8 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               </div>
             )}
             <p className="text-[13px] text-muted">
-              Можно прикрепить до 5 фото. Отзыв появится после проверки модератором.
+              До 5 фото, каждое до 8 МБ. Форматы: JPG, PNG, WebP, GIF.
+              {!user?.is_staff && " Отзыв появится после проверки модератором."}
             </p>
             <button
               type="submit"

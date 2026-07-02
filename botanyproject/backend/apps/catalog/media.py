@@ -23,7 +23,8 @@ ALLOWED_CT = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
-MAX_BYTES = 8 * 1024 * 1024  # 8 МБ на файл
+MAX_BYTES = 8 * 1024 * 1024  # 8 МБ на файл (фото карточки в админке)
+REVIEW_MAX_BYTES = 1 * 1024 * 1024  # 1 МБ на фото в отзыве (согласовано с заказчицей)
 
 
 def _s3():
@@ -36,13 +37,15 @@ def _s3():
     )
 
 
-def upload_image(data: bytes, content_type: str, *, prefix: str = "reviews") -> str:
-    """Залить картинку в S3, вернуть storage_key. Бросает ValueError при неверном типе/размере."""
+def upload_image(data: bytes, content_type: str, *, prefix: str = "reviews",
+                 max_bytes: int = MAX_BYTES) -> str:
+    """Залить картинку в S3, вернуть storage_key. Бросает ValueError при неверном типе/размере.
+    max_bytes задаёт лимит размера (по умолчанию 8 МБ; для отзывов передаётся REVIEW_MAX_BYTES)."""
     ext = ALLOWED_CT.get(content_type)
     if ext is None:
         raise ValueError("Неподдерживаемый тип файла (нужно изображение).")
-    if len(data) > MAX_BYTES:
-        raise ValueError("Файл слишком большой (макс. 8 МБ).")
+    if len(data) > max_bytes:
+        raise ValueError(f"Файл слишком большой (макс. {max_bytes // (1024 * 1024)} МБ).")
     key = f"{prefix}/{uuid.uuid4().hex}{ext}"
     _s3().put_object(
         Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key, Body=data, ContentType=content_type

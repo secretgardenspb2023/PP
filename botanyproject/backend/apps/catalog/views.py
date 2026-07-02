@@ -294,7 +294,10 @@ class ReviewListCreateView(APIView):
         errors = []
         for f in request.FILES.getlist("photos")[: self.MAX_PHOTOS]:
             try:
-                key = media.upload_image(f.read(), f.content_type, prefix="reviews")
+                key = media.upload_image(
+                    f.read(), f.content_type, prefix="reviews",
+                    max_bytes=media.REVIEW_MAX_BYTES,
+                )
                 m.ReviewPhoto.objects.create(
                     review=review, storage_key=key,
                     public_url=imgproxy.full(key), preview_url=imgproxy.thumb(key),

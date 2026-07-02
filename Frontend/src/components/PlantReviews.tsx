@@ -134,10 +134,10 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               accept="image/jpeg,image/png,image/webp,image/gif"
               multiple
               onChange={(e) => {
-                // Лимит как на бэкенде (media.MAX_BYTES): 8 МБ на файл, до 5 фото.
+                // Лимит как на бэкенде (media.REVIEW_MAX_BYTES): 1 МБ на файл, до 5 фото.
                 const all = Array.from(e.target.files ?? []);
-                const ok = all.filter((f) => f.size <= 8 * 1024 * 1024);
-                setErr(ok.length < all.length ? "Файл больше 8 МБ — пропущен." : null);
+                const ok = all.filter((f) => f.size <= 1 * 1024 * 1024);
+                setErr(ok.length < all.length ? "Файл больше 1 МБ — пропущен." : null);
                 setFiles(ok.slice(0, 5));
               }}
               className="hidden"
@@ -172,7 +172,7 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               </div>
             )}
             <p className="text-[13px] text-muted">
-              До 5 фото, каждое до 8 МБ. Форматы: JPG, PNG, WebP, GIF.
+              До 5 фото, каждое до 1 МБ. Форматы: JPG, PNG, WebP, GIF.
               {!user?.is_staff && " Отзыв появится после проверки модератором."}
             </p>
             <button

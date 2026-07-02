@@ -7,6 +7,47 @@ import { createPortal } from "react-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { createReview, getReviews, type Review } from "@/lib/api";
 
+// Сжатие фото в браузере до лимита отзыва (1 МБ): даунскейл до maxDim по большей
+// стороне + понижение JPEG-качества, пока не влезет. Так фото с телефона (2–5 МБ)
+// не отклоняются, а ужимаются. GIF/уже-мелкие не трогаем. Бэкенд (Pillow нет) не задействуем.
+async function compressImage(file: File, maxBytes: number, maxDim: number): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  if (file.size <= maxBytes) return file; // уже влезает
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error("image load"));
+      i.src = url;
+    });
+    const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, w, h);
+    let blob: Blob | null = null;
+    let q = 0.85;
+    for (let i = 0; i < 6; i++) {
+      blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", q));
+      if (!blob || blob.size <= maxBytes) break;
+      q -= 0.13;
+    }
+    if (!blob || blob.size >= file.size) return file; // не помогло — оставляем оригинал
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const REVIEW_MAX = 1024 * 1024; // 1 МБ на фото (как на бэкенде)
+
 export function PlantReviews({ plantId }: { plantId: number }) {
   const { user, token } = useAuth();
   const pathname = usePathname();
@@ -133,12 +174,17 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               multiple
-              onChange={(e) => {
-                // Лимит как на бэкенде (media.REVIEW_MAX_BYTES): 1 МБ на файл, до 5 фото.
-                const all = Array.from(e.target.files ?? []);
-                const ok = all.filter((f) => f.size <= 1 * 1024 * 1024);
-                setErr(ok.length < all.length ? "Файл больше 1 МБ — пропущен." : null);
-                setFiles(ok.slice(0, 5));
+              onChange={async (e) => {
+                // Крупные фото сжимаем в браузере до ~1 МБ (не отклоняем). До 5 фото.
+                const all = Array.from(e.target.files ?? []).slice(0, 5);
+                setErr(null);
+                const out: File[] = [];
+                for (const f of all) out.push(await compressImage(f, Math.floor(REVIEW_MAX * 0.93), 1600));
+                const fit = out.filter((f) => f.size <= REVIEW_MAX);
+                if (fit.length < out.length) {
+                  setErr("Некоторые фото не удалось сжать до 1 МБ — уменьшите размер и попробуйте снова.");
+                }
+                setFiles(fit);
               }}
               className="hidden"
             />
@@ -172,7 +218,7 @@ export function PlantReviews({ plantId }: { plantId: number }) {
               </div>
             )}
             <p className="text-[13px] text-muted">
-              До 5 фото, каждое до 1 МБ. Форматы: JPG, PNG, WebP, GIF.
+              До 5 фото. Крупные снимки автоматически сжимаются до 1 МБ. Форматы: JPG, PNG, WebP, GIF.
               {!user?.is_staff && " Отзыв появится после проверки модератором."}
             </p>
             <button

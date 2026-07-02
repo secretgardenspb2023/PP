@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listPlants, getFacets, getHistograms } from "@/lib/api";
+import { listPlants, getFacets, getHistograms, type Facets } from "@/lib/api";
 import { PlantCard } from "@/components/PlantCard";
 import { Filters } from "@/components/catalog/Filters";
 import { SortSelect } from "@/components/catalog/SortSelect";
@@ -36,6 +36,48 @@ function pick(sp: SP): Record<string, string> {
   return out;
 }
 
+// Человекочитаемая сводка активных фильтров (для строки «По запросу … найдено N»).
+const DIM_LABELS: Record<string, string> = {
+  category: "Категория", sun: "Освещение", soil_acid: "Кислотность почвы",
+  care_level: "Уровень ухода", habit_form: "Форма роста", flower_color: "Цвет цветка",
+  leaf_color: "Цвет листвы", flower_form: "Форма цветка", leaf_shape: "Форма листа",
+  design_use: "Использование в дизайне", garden_style: "Стиль сада",
+  fruit_use: "Использование плодов", propagation: "Размножение",
+  flowering_month: "Месяцы цветения", fruiting_month: "Месяцы плодоношения",
+  vegetation_period: "Период вегетации", designer: "Селекционер",
+};
+const RANGE_LABELS: [string, string][] = [
+  ["height", "Высота"], ["diameter", "Диаметр"], ["growth", "Прирост"],
+];
+
+function activeFilterParts(params: Record<string, string>, facets: Facets): string[] {
+  const parts: string[] = [];
+  if (params.q) parts.push(`«${params.q}»`);
+  for (const [dim, label] of Object.entries(DIM_LABELS)) {
+    const vals = (params[dim] ?? "").split(",").filter(Boolean);
+    if (!vals.length) continue;
+    const opts = facets[dim] ?? [];
+    const labelFor = (v: string) => opts.find((f) => f.value === v)?.label ?? v;
+    parts.push(`${label}: ${vals.map(labelFor).join(", ")}`);
+  }
+  for (const [k, label] of RANGE_LABELS) {
+    const lo = params[`${k}_min`];
+    const hi = params[`${k}_max`];
+    if (lo || hi) parts.push(`${label} ${lo ?? "…"}–${hi ?? "…"} см`);
+  }
+  if (params.usda_zone) parts.push(`Зона USDA: ${params.usda_zone}`);
+  return parts;
+}
+
+// Склонение «растение / растения / растений» по числу.
+function plantsWord(n: number): string {
+  const d = n % 10;
+  const dd = n % 100;
+  if (d === 1 && dd !== 11) return "растение";
+  if (d >= 2 && d <= 4 && (dd < 10 || dd >= 20)) return "растения";
+  return "растений";
+}
+
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const params = pick(sp);
@@ -63,6 +105,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const pageParams = Object.fromEntries(Object.entries(params).filter(([k]) => k !== "page"));
   if (isAlphabet) pageParams.view = "alphabet";
   const qWithoutPage = new URLSearchParams(pageParams).toString();
+  // Активные фильтры для строки-сводки (в алфавитном режиме не показываем).
+  const summaryParts = isAlphabet ? [] : activeFilterParts(params, facets);
 
   return (
     <div className="container-page py-8">
@@ -70,7 +114,27 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
         {isAlphabet ? "Алфавитный указатель" : "Каталог растений"}
       </h1>
       <p className="mb-6 text-[16px] text-muted">
-        Найдено: <span className="font-medium text-ink">{list.count.toLocaleString("ru-RU")}</span>
+        {summaryParts.length > 0 ? (
+          <>
+            По запросу{" "}
+            <span className="text-ink">{summaryParts.join(" + ")}</span>
+            {list.count > 0 ? (
+              <>
+                {" — найдено "}
+                <span className="font-medium text-ink">{list.count.toLocaleString("ru-RU")}</span>{" "}
+                {plantsWord(list.count)}
+              </>
+            ) : (
+              <span className="font-medium text-danger"> — ничего не найдено</span>
+            )}
+          </>
+        ) : (
+          <>
+            Найдено{" "}
+            <span className="font-medium text-ink">{list.count.toLocaleString("ru-RU")}</span>{" "}
+            {plantsWord(list.count)}
+          </>
+        )}
       </p>
 
       {isAlphabet && (
@@ -103,9 +167,19 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               ))}
             </div>
           ) : (
-            <p className="rounded-card border border-line bg-surface p-8 text-center text-muted">
-              Ничего не найдено. Измените запрос или сбросьте фильтры.
-            </p>
+            <div className="rounded-card border border-line bg-surface p-10 text-center">
+              <p className="text-[20px] font-semibold text-ink">Ничего не найдено</p>
+              <p className="mx-auto mt-2 max-w-md text-[15px] text-muted">
+                {summaryParts.length > 0 ? (
+                  <>По запросу «{summaryParts.join(" + ")}» подходящих растений нет. </>
+                ) : null}
+                Измените или{" "}
+                <a href="/catalog" className="font-medium text-brand hover:text-brand-dark">
+                  сбросьте фильтры
+                </a>
+                .
+              </p>
+            </div>
           )}
 
           <Pagination

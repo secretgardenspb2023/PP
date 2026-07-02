@@ -1,8 +1,12 @@
 """Catalog read-API (ТЗ Этап 5)."""
 import hashlib
+import logging
 from urllib.parse import urlencode
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.mail import send_mail
 from django.db.models import Prefetch, Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
@@ -22,6 +26,32 @@ from .filters import (
 from .serializers import PlantDetailSerializer, PlantListSerializer, ReviewSerializer
 
 SEARCH_PAGE_SIZE = 24
+
+logger = logging.getLogger(__name__)
+
+
+def _notify_new_review(review):
+    """Письмо модераторам о новом отзыве на модерации (best-effort, не валит запрос)."""
+    try:
+        emails = [
+            e for e in get_user_model().objects
+            .filter(is_staff=True, is_active=True).exclude(email="")
+            .values_list("email", flat=True)
+            if e and not e.endswith("@social.poiskplant.ru")
+        ]
+        if not emails:
+            return
+        link = f"{settings.FRONTEND_URL}/admin/catalog/review/{review.id}/change/"
+        send_mail(
+            "PoiskPlant: новый отзыв на модерации",
+            f"Поступил новый отзыв к растению (id {review.plant_id}) от {review.author_name}.\n\n"
+            f"Текст: {review.text[:300]}\n\nПроверить и одобрить/отклонить: {link}",
+            settings.DEFAULT_FROM_EMAIL,
+            emails,
+            fail_silently=True,
+        )
+    except Exception:  # noqa: BLE001 — уведомление не должно ломать создание отзыва
+        logger.warning("Не удалось отправить уведомление о новом отзыве", exc_info=True)
 
 
 def _int(value, default):
@@ -304,6 +334,9 @@ class ReviewListCreateView(APIView):
                 )
             except ValueError as exc:
                 errors.append(str(exc))
+        # Отзыв на модерации → письмо модераторам (чтобы знали, когда прилетает).
+        if not is_admin:
+            _notify_new_review(review)
         detail = (
             "Отзыв опубликован." if is_admin
             else "Спасибо! Отзыв отправлен на модерацию."

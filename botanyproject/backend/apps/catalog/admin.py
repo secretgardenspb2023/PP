@@ -323,13 +323,36 @@ class ReviewPhotoInline(admin.TabularInline):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ("id", "plant", "author_name", "status", "created_at")
+    list_display = ("id", "plant", "author_name", "status_badge", "created_at")
     list_filter = ("status", "created_at")
     search_fields = ("author_name", "text", "plant__rus_name_unique")
     list_select_related = ("plant",)
     raw_id_fields = ("plant", "user")
     inlines = [ReviewPhotoInline]
     actions = ["approve", "reject"]
+    ordering = ("-created_at",)  # новые поступления — сверху
+
+    _STATUS = {
+        "pending": ("#d97706", "🕓 На модерации"),
+        "approved": ("#16a34a", "✓ Опубликован"),
+        "rejected": ("#9ca3af", "✕ Отклонён"),
+    }
+
+    @admin.display(description="статус", ordering="status")
+    def status_badge(self, obj):
+        color, label = self._STATUS.get(obj.status, ("#374151", obj.status))
+        return format_html('<b style="color:{}">{}</b>', color, label)
+
+    def changelist_view(self, request, extra_context=None):
+        # Баннер вверху списка: сколько отзывов ждёт модерации (видно сразу при заходе).
+        pending = Review.objects.filter(status="pending").count()
+        if pending:
+            messages.warning(
+                request,
+                f"🕓 Отзывов на модерации: {pending}. Новые — сверху списка; "
+                f"отфильтруйте по статусу «pending», проверьте и нажмите «Одобрить»/«Отклонить».",
+            )
+        return super().changelist_view(request, extra_context=extra_context)
 
     @admin.action(description="Одобрить отзывы")
     def approve(self, request, queryset):

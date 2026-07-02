@@ -37,6 +37,10 @@ server {
 
     include /etc/nginx/snippets/security-headers.conf;
 
+    # 301 со старых WP-URL старого сайта на новые карточки (ТЗ 8.6). $old_redirect
+    # заполняется map'ом в nginx.conf; пусто — обычная обработка ниже.
+    if ($old_redirect) { return 301 $old_redirect; }
+
     location = /robots.txt {
         add_header Content-Type text/plain;
         return 200 "User-agent: *\nAllow: /\nSitemap: https://${DOMAIN}/sitemap.xml\n";
